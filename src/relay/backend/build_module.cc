@@ -524,6 +524,10 @@ class RelayBuildModule : public runtime::ModuleNode {
     // Get the updated function.
     auto func = Downcast<Function>(relay_module->Lookup("main"));
 
+    printf("Updated func:\n");
+    //std::cout << func << std::endl;
+    std::cout << PrettyPrint(func) << std::endl;
+
     // Generate code for the updated function.
     executor_codegen_ = MakeExecutorCodegen(executor_);
     executor_codegen_->Init(nullptr, targets_);
