@@ -40,7 +40,9 @@ def getTypeSize(t):
     ty2Sz = {
         "int8": 8,
         "int16": 16,
-        "int32": 32
+        "int32": 32,
+        "int64": 64,
+        "float32": 32
     }
     size *= divRoundUp(ty2Sz[t.dtype], 8)
     return int(size)
