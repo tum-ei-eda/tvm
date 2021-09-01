@@ -562,3 +562,8 @@ class BatchToSpaceNDAttrs(Attrs):
 @tvm._ffi.register_object("relay.attrs.ThreefryGenerateAttrs")
 class ThreefryGenerateAttrs(Attrs):
     """Attributes used in ThreefryGenerateAttrs operators"""
+
+
+@tvm._ffi.register_object("relay.attrs.FixedPointMultiplyAttrs")
+class FixedPointMultiplyAttrs(Attrs):
+    """Attributes used in fixed_point_multiply operators"""
