@@ -185,14 +185,13 @@ def verify_partition(mod, params):
     params = [gen_rand_tvm(param.type_annotation, 0, 1) for param in partitioned_mod["main"].params]
 
     def _eval_mod(mod):
-        vm = relay.create_executor("vm", device=tvm.cpu(0), target="llvm", mod=mod)
-        return vm.evaluate()(*params)
+        return relay.create_executor("vm", device=tvm.cpu(0), target="llvm", mod=mod).evaluate()(
+            *params
+        )
 
     partitioned_mod_result = _eval_mod(partitioned_mod)
     unpartitioned_mod_result = _eval_mod(unpartitioned_mod)
-    tvm.testing.assert_allclose(
-        unpartitioned_mod_result.asnumpy(), partitioned_mod_result.asnumpy()
-    )
+    tvm.testing.assert_allclose(unpartitioned_mod_result.numpy(), partitioned_mod_result.numpy())
 
 
 def test_add_partition():
@@ -366,7 +365,7 @@ def test_left_shift_negative():
     opf.visit(qnn_mod["main"])
     assert len(opf.ops) > 0, 'Broken case, can\'t find any "left_shift" operators.'
     for left_shift_op in opf.ops:
-        shift_amount = left_shift_op.args[1].data.asnumpy()
+        shift_amount = left_shift_op.args[1].data.numpy()
         assert shift_amount >= 0, "Shift amount must be non-negative."
 
 

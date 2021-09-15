@@ -169,7 +169,7 @@ The returned module, which can be thought of as a combination of a compiled func
    b = tvm.nd.array(np.random.uniform(size=n).astype(B.dtype), dev)
    c = tvm.nd.array(np.zeros(n, dtype=C.dtype), dev)
    fadd(a, b, c)
-   output = c.asnumpy()
+   output = c.numpy()
 
 Under the hood, TVM allocates device memory and manages memory transfers automatically. To do that, each backend needs to subclass ``DeviceAPI`` class, defined in ``include/tvm/runtime/device_api.h``, and override memory management methods to use device specific API. For example, the CUDA backend implements ``CUDADeviceAPI`` in ``src/runtime/cuda/cuda_device_api.cc`` to use ``cudaMalloc``, ``cudaMemcpy`` etc.
 
@@ -183,7 +183,7 @@ The first time you invoke the compiled module with ``fadd(a, b, c)``, ``GetFunct
      auto it = fmap_.find(name);
      const FunctionInfo& info = it->second;
      CUDAWrappedFunc f;
-     f.Init(this, sptr_to_self, name, info.arg_types.size(), info.thread_axis_tags);
+     f.Init(this, sptr_to_self, name, info.arg_types.size(), info.launch_param_tags);
      return PackFuncVoidAddr(f, info.arg_types);
    }
 
@@ -204,7 +204,7 @@ The ``PackedFunc``'s overloaded ``operator()`` will be called, which in turn cal
          fcache_[device_id] = m_->GetFunc(device_id, func_name_);
        }
        CUstream strm = static_cast<CUstream>(CUDAThreadEntry::ThreadLocal()->stream);
-       ThreadWorkLoad wl = thread_axis_cfg_.Extract(args);
+       ThreadWorkLoad wl = launch_param_config_.Extract(args);
        CUresult result = cuLaunchKernel(
            fcache_[device_id],
            wl.grid_dim(0),

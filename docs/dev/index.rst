@@ -24,9 +24,15 @@ This page is organized as follows:
 
 - The `Example Compilation Flow`_ gives an overview of the steps that TVM takes to turn a high level description of a model into a deployable module.
   To get started, please read this section first.
+
 - The `Logical Architecture Components`_ section describes the logical components.
   The sections after are specific guides focused on each logical component, organized
   by the component's name.
+
+- The :ref:`Device/Target Interactions <tvm-target-specific-overview>`
+  page describes how TVM interacts with each supported physical device
+  and code-generation target.
+
 - Feel free to also check out the :ref:`dev-how-to` for useful development tips.
 
 This guide provides a few complementary views of the architecture.
@@ -147,7 +153,7 @@ The main goal of TVM's runtime is to provide a minimal API for loading and execu
     arr: tvm.runtime.NDArray = tvm.nd.array([1, 2, 3], device=tvm.cuda(0))
     fun: tvm.runtime.PackedFunc = mod["addone"]
     fun(a)
-    print(a.asnumpy())
+    print(a.numpy())
 
 
 :py:class:`tvm.runtime.Module` encapsulates the result of compilation. A runtime.Module contains a GetFunction method to obtain PackedFuncs by name.
@@ -172,7 +178,7 @@ The above example only deals with a simple `addone` function. The code snippet b
    # execute the model
    gmod["run"]()
    # get the output
-   result = gmod["get_output"](0).asnumpy()
+   result = gmod["get_output"](0).numpy()
 
 The main take away is that runtime.Module and runtime.PackedFunc are sufficient to encapsulate both operator level programs (such as addone), as well as the end-to-end models.
 
@@ -242,9 +248,17 @@ for learning-based optimizations.
    :maxdepth: 1
 
    runtime
+
+
+.. toctree::
+   :maxdepth: 1
+
    debugger
    virtual_machine
    introduction_to_module_serialization
+   device_target_interactions
+
+
 
 tvm/node
 --------
@@ -311,6 +325,11 @@ It also provides a common `Target` class that describes the target.
 
 The compilation pipeline can be customized according to the target by querying the attribute information
 in the target and builtin information registered to each target id(cuda, opencl).
+
+.. toctree::
+   :maxdepth: 1
+
+   device_target_interactions
 
 tvm/tir
 -------
@@ -404,3 +423,4 @@ microTVM
    :maxdepth: 1
 
    microtvm_design
+   model_library_format

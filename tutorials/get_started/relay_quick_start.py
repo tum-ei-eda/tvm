@@ -55,10 +55,11 @@ import tvm.testing
 # Relay also supports other model formats such as MXNet, CoreML, ONNX and
 # Tensorflow.
 #
-# In this tutorial, we assume we will do inference on our device
-# and the batch size is set to be 1. Input images are RGB color
-# images of size 224 * 224. We can call the :any:`tvm.relay.TupleWrapper.astext()`
-# to show the network structure.
+# In this tutorial, we assume we will do inference on our device and
+# the batch size is set to be 1. Input images are RGB color images of
+# size 224 * 224. We can call the
+# :py:meth:`tvm.relay.expr.TupleWrapper.astext()` to show the network
+# structure.
 
 batch_size = 1
 num_class = 1000
@@ -116,7 +117,7 @@ module.set_input("data", data)
 # run
 module.run()
 # get output
-out = module.get_output(0, tvm.nd.empty(out_shape)).asnumpy()
+out = module.get_output(0, tvm.nd.empty(out_shape)).numpy()
 
 # Print first 10 elements of output
 print(out.flatten()[0:10])
@@ -145,7 +146,7 @@ input_data = tvm.nd.array(data)
 
 module = graph_executor.GraphModule(loaded_lib["default"](dev))
 module.run(data=input_data)
-out_deploy = module.get_output(0).asnumpy()
+out_deploy = module.get_output(0).numpy()
 
 # Print first 10 elements of output
 print(out_deploy.flatten()[0:10])

@@ -32,7 +32,7 @@ A quick solution is
 
     pip install mxnet --user
 
-or please refer to offical installation guide.
+or please refer to official installation guide.
 https://mxnet.apache.org/versions/master/install/index.html
 """
 # some standard imports
@@ -115,7 +115,7 @@ m.set_input("data", tvm.nd.array(x.astype(dtype)))
 m.run()
 # get outputs
 tvm_output = m.get_output(0)
-top1 = np.argmax(tvm_output.asnumpy()[0])
+top1 = np.argmax(tvm_output.numpy()[0])
 print("TVM prediction top-1:", top1, synset[top1])
 
 ######################################################################

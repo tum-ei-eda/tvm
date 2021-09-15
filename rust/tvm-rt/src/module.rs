@@ -82,10 +82,10 @@ impl Module {
             return Err(errors::Error::NullHandle(name.into_string()?.to_string()));
         }
 
-        Ok(Function::new(fhandle))
+        Ok(Function::from_raw(fhandle))
     }
 
-    /// Imports a dependent module such as `.ptx` for gpu.
+    /// Imports a dependent module such as `.ptx` for cuda gpu.
     pub fn import_module(&self, dependent_module: Module) {
         check_call!(ffi::TVMModImport(self.handle(), dependent_module.handle()))
     }

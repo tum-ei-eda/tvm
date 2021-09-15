@@ -22,7 +22,6 @@
  */
 #include "codegen_c_host.h"
 
-#include <tvm/runtime/container.h>
 #include <tvm/runtime/crt/error_codes.h>
 #include <tvm/runtime/module.h>
 #include <tvm/target/codegen.h>
@@ -48,9 +47,10 @@ void CodeGenCHost::Init(bool output_ssa, bool emit_asserts, std::string target_s
   decl_stream << "#include \"tvm/runtime/c_runtime_api.h\"\n";
   decl_stream << "#include \"tvm/runtime/c_backend_api.h\"\n";
   decl_stream << "#include <math.h>\n";
-  decl_stream << "void* " << module_name_ << " = NULL;\n";
   CodeGenC::Init(output_ssa);
 }
+
+void CodeGenCHost::DefineModuleName() { decl_stream << "void* " << module_name_ << " = NULL;\n"; }
 
 void CodeGenCHost::AddFunction(const PrimFunc& f) {
   auto global_symbol = f->GetAttr<String>(tvm::attr::kGlobalSymbol);
@@ -59,22 +59,20 @@ void CodeGenCHost::AddFunction(const PrimFunc& f) {
   function_names_.push_back(global_symbol.value());
 
   CodeGenC::AddFunction(f);
+  if (f->HasNonzeroAttr(tir::attr::kIsEntryFunc)) {
+    function_names_.push_back(runtime::symbol::tvm_module_main);
+    stream << "// CodegenC: NOTE: Auto-generated entry function\n";
+    PrintFuncPrefix();
+    stream << " " << tvm::runtime::symbol::tvm_module_main
+           << "(void* args, int* arg_type_ids, int num_args, void* out_ret_value, "
+           << "int* out_ret_tcode, void* resource_handle) {\n";
+    stream << "  return " << global_symbol.value()
+           << "(args, arg_type_ids, num_args, out_ret_value, out_ret_tcode, resource_handle);\n";
+    stream << "}\n";
+  }
 }
 
-void CodeGenCHost::LinkParameters(Map<String, LinkedParam> params) {
-  PrintFuncPrefix();
-  stream << " " << tvm::runtime::symbol::tvm_lookup_linked_param
-         << "(void* args, int* arg_type_ids, int num_args, void* out_ret_value, "
-         << "int* out_ret_tcode, void* resource_handle) {\n";
-  ICHECK_EQ(GetUniqueName(tvm::runtime::symbol::tvm_lookup_linked_param),
-            tvm::runtime::symbol::tvm_lookup_linked_param)
-      << "builtin PackedFunc name already taken: " << tvm::runtime::symbol::tvm_lookup_linked_param;
-  stream << "    switch (((int64_t*) args)[0]) {\n"
-         << "    default:\n"
-         << "        out_ret_tcode[0] = " << kTVMNullptr << ";\n"
-         << "        return 0;\n";
-
-  function_names_.push_back(tvm::runtime::symbol::tvm_lookup_linked_param);
+void CodeGenCHost::DeclareParameters(Map<String, LinkedParam> params) {
   for (auto kv : params) {
     decl_stream << "\n"
                 << "#ifdef __cplusplus\n"
@@ -93,6 +91,24 @@ void CodeGenCHost::LinkParameters(Map<String, LinkedParam> params) {
                 << "#ifdef __cplusplus\n"
                 << "}  // extern \"C\"\n"
                 << "#endif\n";
+  }
+}
+
+void CodeGenCHost::LinkParameters(Map<String, LinkedParam> params) {
+  PrintFuncPrefix();
+  stream << " " << tvm::runtime::symbol::tvm_lookup_linked_param
+         << "(void* args, int* arg_type_ids, int num_args, void* out_ret_value, "
+         << "int* out_ret_tcode, void* resource_handle) {\n";
+  ICHECK_EQ(GetUniqueName(tvm::runtime::symbol::tvm_lookup_linked_param),
+            tvm::runtime::symbol::tvm_lookup_linked_param)
+      << "builtin PackedFunc name already taken: " << tvm::runtime::symbol::tvm_lookup_linked_param;
+  stream << "    switch (((int64_t*) args)[0]) {\n"
+         << "    default:\n"
+         << "        out_ret_tcode[0] = " << kTVMNullptr << ";\n"
+         << "        return 0;\n";
+
+  function_names_.push_back(tvm::runtime::symbol::tvm_lookup_linked_param);
+  for (auto kv : params) {
     stream << "    case " << kv.second->id << ":\n"
            << "        ((uint64_t*)out_ret_value)[0] = (uint64_t) (uintptr_t) "
            << ::tvm::runtime::symbol::tvm_param_prefix << kv.first << ";\n"
@@ -385,8 +401,7 @@ runtime::Module BuildCHost(IRModule mod, Target target) {
     // Make sure that the executor function is the last one to be code generated so that all the
     // symbols are available to tvm_run_func
     auto fun_name = std::string(kv.first->name_hint);
-    const bool is_aot_executor_fn =
-        (fun_name.rfind(::tvm::runtime::symbol::tvm_run_func_prefix, 0) == 0);
+    bool is_aot_executor_fn = kv.second->GetAttr<Bool>("runner_function", Bool(false)).value();
 
     if (is_aot_executor_fn) {
       aot_executor_fn = Downcast<PrimFunc>(kv.second);
@@ -398,12 +413,14 @@ runtime::Module BuildCHost(IRModule mod, Target target) {
     cg.AddFunction(f);
   }
 
-  if (could_have_linked_params) {
+  if (could_have_linked_params && !aot_executor_fn.defined()) {
     ICHECK(found_linked_params) << "-link-params given but none found";
+    cg.DeclareParameters(linked_params);
     cg.LinkParameters(linked_params);
   }
 
-  if (aot_executor_fn.defined()) {
+  if (could_have_linked_params && aot_executor_fn.defined()) {
+    cg.DeclareParameters(linked_params);
     cg.AddFunction(aot_executor_fn);
   }
 

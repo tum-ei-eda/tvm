@@ -58,7 +58,7 @@ def check_result(
         exe = runtime.vm.Executable.load_exec(code, lib)
         vm = runtime.vm.VirtualMachine(exe, device)
         out = vm.run(**map_inputs)
-        tvm.testing.assert_allclose(out.asnumpy(), result, rtol=tol, atol=tol)
+        tvm.testing.assert_allclose(out.numpy(), result, rtol=tol, atol=tol)
 
     def check_graph_executor_result():
         with tvm.transform.PassContext(opt_level=3, disabled_pass=["AlterOpLayout"]):
@@ -73,7 +73,7 @@ def check_result(
         out = tvm.nd.empty(out_shape, device=device)
         out = rt_mod.get_output(0, out)
 
-        tvm.testing.assert_allclose(out.asnumpy(), result, rtol=tol, atol=tol)
+        tvm.testing.assert_allclose(out.numpy(), result, rtol=tol, atol=tol)
 
     check_vm_result()
     check_graph_executor_result()
@@ -144,11 +144,12 @@ def test_extern_dnnl():
         i_data = np.random.uniform(0, 1, ishape).astype(dtype)
         w1_data = np.random.uniform(0, 1, w1shape).astype(dtype)
 
-        ref_ex = relay.create_executor("graph", mod=ref_mod, device=tvm.cpu())
-        ref_res = ref_ex.evaluate()(i_data, w1_data)
+        ref_res = relay.create_executor("graph", mod=ref_mod, device=tvm.cpu()).evaluate()(
+            i_data, w1_data
+        )
 
         check_result(
-            mod, {"data": i_data, "weight1": w1_data}, (1, 32, 14, 14), ref_res.asnumpy(), tol=1e-5
+            mod, {"data": i_data, "weight1": w1_data}, (1, 32, 14, 14), ref_res.numpy(), tol=1e-5
         )
 
     test_annotate()
@@ -171,10 +172,11 @@ def test_extern_dnnl_mobilenet():
     i_data = np.random.uniform(0, 1, ishape).astype(dtype)
 
     ref_mod, params = relay.testing.mobilenet.get_workload(batch_size=1, dtype="float32")
-    ref_ex = relay.create_executor("graph", mod=ref_mod, device=tvm.cpu(0))
-    ref_res = ref_ex.evaluate()(i_data, **params)
+    ref_res = relay.create_executor("graph", mod=ref_mod, device=tvm.cpu(0)).evaluate()(
+        i_data, **params
+    )
 
-    check_result(mod, {"data": i_data}, (1, 1000), ref_res.asnumpy(), tol=1e-5, params=params)
+    check_result(mod, {"data": i_data}, (1, 1000), ref_res.numpy(), tol=1e-5, params=params)
 
 
 def test_multiple_ends():

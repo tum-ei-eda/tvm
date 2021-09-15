@@ -51,7 +51,7 @@ def quantize_test_driver(in_dtype, quant_args, axis, out_dtype, in_data):
     rt_mod.set_input(input_data=in_data)
     rt_mod.set_input(**params)
     rt_mod.run()
-    res = rt_mod.get_output(0).asnumpy()
+    res = rt_mod.get_output(0).numpy()
     return res
 
 
@@ -85,11 +85,11 @@ def verify_simulated_quantize_simple(dtype):
     )
     input_data = relay.var("input_data", shape=data.shape, dtype="float32")
     scale = relay.var("scale", shape=[])
-    zp = relay.var("zp", shape=[])
-    dtype = relay.var("dtype", shape=[])
+    zp = relay.var("zp", shape=[], dtype="int32")
+    dtype = relay.var("dtype", shape=[], dtype="int32")
     vm = build_simulated_quantize(input_data, scale, zp, dtype)
     sim_q_out = vm.invoke("main", input_data=data, scale=scale_np, zp=zp_np, dtype=dtype_np)
-    allclose_with_rounding(sim_q_out.asnumpy(), q_out)
+    allclose_with_rounding(sim_q_out.numpy(), q_out)
 
 
 def test_simulated_quantize():
@@ -117,10 +117,10 @@ def test_dynamic_channels():
     input_data = relay.var("input_data", shape=data.shape, dtype="float32")
     scale = relay.var("scale", shape=[relay.Any()], dtype="float32")
     zp = relay.var("zp", shape=[relay.Any()], dtype="int32")
-    dtype = relay.var("dtype", shape=[])
+    dtype = relay.var("dtype", shape=[], dtype="int32")
     vm = build_simulated_quantize(input_data, scale, zp, dtype, axis=0)
     sim_q_out = vm.invoke("main", input_data=data, scale=scale_np, zp=zp_np, dtype=dtype_np)
-    allclose_with_rounding(sim_q_out.asnumpy(), q_out)
+    allclose_with_rounding(sim_q_out.numpy(), q_out)
 
     # Now get the perchannel quantize output and compare without recompiling.
     scale_np = np.array([0.5, 0.25]).astype("float32")
@@ -137,7 +137,7 @@ def test_dynamic_channels():
     )
     # Run the simulated quantize without recompiling and confirm results match.
     sim_q_out = vm.invoke("main", input_data=data, scale=scale_np, zp=zp_np, dtype=dtype_np)
-    allclose_with_rounding(sim_q_out.asnumpy(), q_out)
+    allclose_with_rounding(sim_q_out.numpy(), q_out)
 
 
 def test_dynamic_dtype():
@@ -159,10 +159,10 @@ def test_dynamic_dtype():
     input_data = relay.var("input_data", shape=data.shape, dtype="float32")
     scale = relay.var("scale", shape=[relay.Any()], dtype="float32")
     zp = relay.var("zp", shape=[relay.Any()], dtype="int32")
-    dtype = relay.var("dtype", shape=[])
+    dtype = relay.var("dtype", shape=[], dtype="int32")
     vm = build_simulated_quantize(input_data, scale, zp, dtype)
     sim_q_out = vm.invoke("main", input_data=data, scale=scale_np, zp=zp_np, dtype=dtype_np)
-    allclose_with_rounding(sim_q_out.asnumpy(), q_out)
+    allclose_with_rounding(sim_q_out.numpy(), q_out)
 
     # Now test float32 to int32 compilation.
     # Get the reference quantize output.
@@ -176,7 +176,7 @@ def test_dynamic_dtype():
     # Run the simulated quantize without recompiling and confirm results match.
     dtype_np = np.int32(SQNN_DTYPE_TO_CODE["int32"])
     sim_q_out = vm.invoke("main", input_data=data, scale=scale_np, zp=zp_np, dtype=dtype_np)
-    allclose_with_rounding(sim_q_out.asnumpy(), q_out)
+    allclose_with_rounding(sim_q_out.numpy(), q_out)
 
 
 if __name__ == "__main__":

@@ -28,19 +28,19 @@ fn main() {
     let (dev, dev_name) = if cfg!(feature = "cpu") {
         (Device::cpu(0), "cpu")
     } else {
-        (Device::gpu(0), "gpu")
+        (Device::cuda(0), "cuda")
     };
 
     let dtype = DataType::from_str("float32").unwrap();
     let mut arr = NDArray::empty(shape, dev, dtype);
     arr.copy_from_buffer(data.as_mut_slice());
     let ret = NDArray::empty(shape, dev, dtype);
-    let mut fadd = Module::load(&concat!(env!("OUT_DIR"), "/test_add.so")).unwrap();
+    let fadd = Module::load(&concat!(env!("OUT_DIR"), "/test_add.so")).unwrap();
     if !fadd.enabled(dev_name) {
         return;
     }
 
-    if cfg!(feature = "gpu") {
+    if cfg!(feature = "cuda") {
         fadd.import_module(Module::load(&concat!(env!("OUT_DIR"), "/test_add.ptx")).unwrap());
     }
 

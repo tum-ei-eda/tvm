@@ -32,6 +32,7 @@ from torch.nn import functional as F
 from tvm import relay
 from tvm.contrib import graph_executor
 from tvm.contrib.nvcc import have_fp16
+import pytest
 
 sys.setrecursionlimit(10000)
 
@@ -218,7 +219,7 @@ def verify_model(
             relay_model.run()
 
             for i, baseline_output in enumerate(baseline_outputs):
-                compiled_output = relay_model.get_output(i).asnumpy()
+                compiled_output = relay_model.get_output(i).numpy()
 
                 assert_shapes_match(baseline_output, compiled_output)
                 tvm.testing.assert_allclose(baseline_output, compiled_output, rtol=rtol, atol=atol)
@@ -642,6 +643,10 @@ def test_forward_prelu():
     input_shape = [1, 3, 10, 10]
     input_data = torch.rand(input_shape).float()
     verify_model(torch.nn.PReLU(num_parameters=3).eval(), input_data=input_data)
+    # Test when input channel > 1 and num parameters = 1
+    verify_model(torch.nn.PReLU(num_parameters=1).eval(), input_data=input_data)
+    # Test when input dims < 2
+    verify_model(torch.nn.PReLU(num_parameters=1).eval(), input_data=torch.randn(2))
 
 
 @tvm.testing.uses_gpu
@@ -661,7 +666,7 @@ def test_forward_leakyrelu():
 def test_forward_elu():
     torch.set_grad_enabled(False)
     input_shape = [1, 3, 10, 10]
-    input_data = torch.rand(input_shape).float()
+    input_data = torch.randn(input_shape).float()
     verify_model(torch.nn.ELU().eval(), input_data=input_data)
     verify_model(torch.nn.ELU(alpha=0.3).eval(), input_data=input_data)
     verify_model(torch.nn.ELU(alpha=1.0).eval(), input_data=input_data)
@@ -693,6 +698,14 @@ def test_forward_selu():
     input_shape = [1, 3, 10, 10]
     input_data = torch.rand(input_shape).float()
     verify_model(torch.nn.SELU().eval(), input_data=input_data)
+
+
+@tvm.testing.uses_gpu
+def test_forward_silu():
+    torch.set_grad_enabled(False)
+    input_shape = [1, 3, 10, 10]
+    input_data = torch.rand(input_shape).float()
+    verify_model(torch.nn.SiLU().eval(), input_data=input_data)
 
 
 @tvm.testing.uses_gpu
@@ -965,17 +978,63 @@ def test_forward_conv():
 
 
 @tvm.testing.uses_gpu
-def test_forward_conv_transpose():
-    torch.set_grad_enabled(False)
-    conv2d_input_shape = [1, 3, 10, 10]
-    conv2d_input_data = torch.rand(conv2d_input_shape).float()
-    verify_model(torch.nn.ConvTranspose2d(3, 6, 7, bias=True), input_data=conv2d_input_data)
-    verify_model(torch.nn.ConvTranspose2d(3, 12, 3, bias=False), input_data=conv2d_input_data)
+@pytest.mark.parametrize("in_channels", [3], ids=lambda x: "in_channels=" + str(x))
+@pytest.mark.parametrize("out_channels", [5], ids=lambda x: "out_channels=" + str(x))
+@pytest.mark.parametrize("kernel_size", [3], ids=lambda x: "kernel_size=" + str(x))
+@pytest.mark.parametrize("output_padding", [0, 1, 2], ids=lambda x: "output_padding=" + str(x))
+@pytest.mark.parametrize("groups", [1], ids=lambda x: "groups=" + str(x))
+@pytest.mark.parametrize("bias", [True, False], ids=lambda x: "bias=" + str(x))
+def test_forward_conv_transpose(
+    in_channels, out_channels, kernel_size, output_padding, bias, groups
+):
+    # Note we do not test with groups  > 1 because that is not supported
+    # in tvm for conv transpose operations
 
-    conv1d_input_shape = [1, 3, 10]
+    # Output padding must be smaller than either stride or dilation so we
+    # opt to make the stride 1 + output padding
+    stride = output_padding + 1
+
+    # Conv 3D Transpose Tests
+    conv3d_input_shape = [1, in_channels, 16, 16, 16]
+    conv3d_input_data = torch.rand(conv3d_input_shape).float()
+    conv3d_transpose = torch.nn.ConvTranspose3d(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        kernel_size=kernel_size,
+        stride=stride,
+        output_padding=output_padding,
+        groups=groups,
+        bias=bias,
+    ).eval()
+    verify_model(conv3d_transpose, conv3d_input_data)
+
+    # Conv 2D Transpose Tests
+    conv2d_input_shape = [1, in_channels, 128, 256]
+    conv2d_input_data = torch.rand(conv2d_input_shape).float()
+    conv2d_transpose = torch.nn.ConvTranspose2d(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        kernel_size=kernel_size,
+        stride=stride,
+        output_padding=output_padding,
+        groups=groups,
+        bias=bias,
+    ).eval()
+    verify_model(conv2d_transpose, conv2d_input_data)
+
+    # # Conv 1D Transpose Tests
+    conv1d_input_shape = [1, in_channels, 10]
     conv1d_input_data = torch.rand(conv1d_input_shape).float()
-    verify_model(torch.nn.ConvTranspose1d(3, 6, 7, bias=True), input_data=conv1d_input_data)
-    verify_model(torch.nn.ConvTranspose1d(3, 12, 3, bias=False), input_data=conv1d_input_data)
+    conv1d_transpose = torch.nn.ConvTranspose1d(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        kernel_size=kernel_size,
+        stride=stride,
+        output_padding=output_padding,
+        groups=groups,
+        bias=bias,
+    ).eval()
+    verify_model(conv1d_transpose, conv1d_input_data)
 
 
 def test_forward_deform_conv():
@@ -1517,9 +1576,18 @@ def test_forward_linear():
         def forward(self, input, weight):
             return F.linear(input, weight)
 
+    class LinearNested(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+
+        def forward(self, x, y, z):
+            return F.linear(x, F.linear(y, z))
+
     input2d = torch.rand([2, 2]).float()
+    input3d = torch.rand([4, 3, 2]).float()
     weight1d = torch.rand([2]).float()
     weight2d = torch.rand([2, 2]).float()
+    weight3x2 = torch.rand([3, 2]).float()
     bias1d = torch.rand([2]).float()
     bias2d = torch.rand([2, 2]).float()
     # 2D input, 2D weight, 1D bias
@@ -1528,9 +1596,15 @@ def test_forward_linear():
     verify_model(Linear(), input_data=[input2d, weight2d, bias2d])
     # 2D input, 2D weight, no bias
     verify_model(LinearNoBias(), input_data=[input2d, weight2d])
+    verify_model(LinearNoBias(), input_data=[input2d, weight3x2])
     # 2D input, 1D weight, 1D bias is not supported by torch.linear()
     # 2D input, 1D weight, no bias
     verify_model(LinearNoBias(), input_data=[input2d, weight1d])
+    # 3D input, 2D weight, no bias
+    verify_model(LinearNoBias(), input_data=[input3d, weight3x2])
+
+    verify_model(LinearNested(), input_data=[torch.randn(10, 10) for _ in range(3)])
+
     # TODO: Add the following cases when matmul(1D, _) is supported by TVM
     # 1D input, 2D weight, 1D bias
     # 1D input, 2D weight, no bias
@@ -1705,11 +1779,14 @@ def test_upsample():
     verify_model(Upsample(size=(64, 64), mode="bilinear", align_corners=True), inp)
     verify_model(Upsample(scale=2, mode="bilinear", align_corners=True), inp)
     verify_model(Upsample(size=(50, 50), mode="bilinear", align_corners=True), inp)
+    verify_model(Upsample(size=(64, 64), mode="bicubic", align_corners=True), inp)
+    verify_model(Upsample(scale=2, mode="bicubic", align_corners=True), inp)
+    verify_model(Upsample(size=(50, 50), mode="bicubic", align_corners=True), inp)
 
 
 @tvm.testing.uses_gpu
 def test_to():
-    """ test for aten::to(...) """
+    """test for aten::to(...)"""
 
     class ToCPU(Module):
         def forward(self, x):
@@ -2113,7 +2190,7 @@ def verify_trace_model(pt_model, idata, targets):
 
 
 def convert_pt_to_tvm_type(idtype):
-    """ Accepts a pytorch dtype and returns string TVM dtype."""
+    """Accepts a pytorch dtype and returns string TVM dtype."""
     # TVM does not support PyTorch complex dtypes
     if idtype == torch.float64:
         curr_dtype = "float64"
@@ -2173,8 +2250,7 @@ def verify_model_vm(input_model, ishapes, idtype=None, idata=None, targets=["llv
         print("Running on target", tgt)
         dev = tvm.device(tgt, 0)
 
-        executor = relay.create_executor("vm", mod=mod, device=dev, target=tgt)
-        evaluator = executor.evaluate()
+        evaluator = relay.create_executor("vm", mod=mod, device=dev, target=tgt).evaluate()
 
         # Inference
         for name, inp in zip(input_names, input_data):
@@ -2189,13 +2265,13 @@ def verify_model_vm(input_model, ishapes, idtype=None, idata=None, targets=["llv
         if isinstance(pt_result, tuple):
             # handle multiple outputs
             for i in range(len(pt_result)):
-                tvm_res = vm_res[i].asnumpy()
+                tvm_res = vm_res[i].numpy()
                 tvm.testing.assert_allclose(tvm_res, pt_result[i].numpy(), rtol=1e-5, atol=1e-5)
         elif not isinstance(pt_result, torch.Tensor):
-            tvm_res = vm_res.asnumpy().item()
+            tvm_res = vm_res.numpy().item()
             assert pt_result == tvm_res
         else:
-            tvm.testing.assert_allclose(vm_res.asnumpy(), pt_result.numpy(), rtol=1e-5, atol=1e-5)
+            tvm.testing.assert_allclose(vm_res.numpy(), pt_result.numpy(), rtol=1e-5, atol=1e-5)
 
 
 @tvm.testing.uses_gpu
@@ -3622,7 +3698,7 @@ def test_forward_pretrained_bert_base_uncased():
     relay_model.set_input(input_1, tokens_tensor)
     relay_model.set_input(input_2, segments_tensors)
     relay_model.run()
-    compiled_output = relay_model.get_output(0).asnumpy()
+    compiled_output = relay_model.get_output(0).numpy()
 
     ######################################################################
     # Validate the outputs
@@ -3819,6 +3895,48 @@ def test_unique():
     verify_trace_model(test_fn(True, False, True), [in_data], targets)
 
 
+def test_forward_nll_loss():
+    torch.set_grad_enabled(False)
+    N, C = 10, 3
+    predictions = torch.rand((N, C)).float()
+    targets = torch.randint(0, 3, (N,))
+    weights = torch.tensor([1, 2, 3]).float()
+    verify_model(torch.nn.NLLLoss().eval(), input_data=[predictions, targets])
+    verify_model(torch.nn.NLLLoss(weight=weights).eval(), input_data=[predictions, targets])
+    verify_model(torch.nn.NLLLoss(ignore_index=1).eval(), input_data=[predictions, targets])
+    verify_model(torch.nn.NLLLoss(reduction="sum").eval(), input_data=[predictions, targets])
+    verify_model(torch.nn.NLLLoss(reduction="none").eval(), input_data=[predictions, targets])
+
+    # multidimension nll loss (aten::nll_loss2d)
+    d1, d2 = 2, 3
+    predictions = torch.rand((N, C, d1, d2)).float()
+    targets = torch.randint(0, 3, (N, d1, d2))
+    verify_model(torch.nn.NLLLoss().eval(), input_data=[predictions, targets])
+    verify_model(torch.nn.NLLLoss(weight=weights).eval(), input_data=[predictions, targets])
+    verify_model(torch.nn.NLLLoss(ignore_index=1).eval(), input_data=[predictions, targets])
+    verify_model(torch.nn.NLLLoss(reduction="sum").eval(), input_data=[predictions, targets])
+    verify_model(torch.nn.NLLLoss(reduction="none").eval(), input_data=[predictions, targets])
+
+
+@tvm.testing.uses_gpu
+def test_forward_flip():
+    torch.set_grad_enabled(False)
+
+    class Flip(Module):
+        def __init__(self, axis=0):
+            super().__init__()
+            self.axis = axis
+
+        def forward(self, x):
+            return x.flip([self.axis])
+
+    input = torch.randn(2, 3, 4)
+    verify_model(Flip(axis=0), input_data=input)
+    verify_model(Flip(axis=1), input_data=input)
+    verify_model(Flip(axis=2), input_data=input)
+    verify_model(Flip(axis=-1), input_data=input)
+
+
 if __name__ == "__main__":
     # some structural tests
     test_forward_traced_function()
@@ -3888,6 +4006,7 @@ if __name__ == "__main__":
     test_forward_logsoftmax()
     test_forward_sigmoid()
     test_forward_dense()
+    test_forward_linear()
     test_forward_avgpool1d()
     test_forward_avgpool2d()
     test_forward_avgpool3d()
@@ -3960,6 +4079,8 @@ if __name__ == "__main__":
     test_unique()
     test_hard_swish()
     test_hard_sigmoid()
+    test_forward_nll_loss()
+    test_forward_flip()
 
     # Model tests
     test_resnet18()

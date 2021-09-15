@@ -43,7 +43,7 @@ def dequantize_test_driver(in_dtype, quant_args, axis, in_data):
     rt_mod.set_input(input_data=in_data)
     rt_mod.set_input(**params)
     rt_mod.run()
-    res = rt_mod.get_output(0).asnumpy()
+    res = rt_mod.get_output(0).numpy()
     return res
 
 
@@ -77,11 +77,11 @@ def verify_simulated_dequantize_simple(dtype):
     )
     input_data = relay.var("input_data", shape=data.shape, dtype="float32")
     scale = relay.var("scale", shape=[])
-    zp = relay.var("zp", shape=[])
-    dtype = relay.var("dtype", shape=[])
+    zp = relay.var("zp", shape=[], dtype="int32")
+    dtype = relay.var("dtype", shape=[], dtype="int32")
     vm = build_simulated_dequantize(input_data, scale, zp, dtype)
     sim_dq_out = vm.invoke("main", input_data=data_fp, scale=scale_np, zp=zp_np, dtype=dtype_np)
-    np.testing.assert_allclose(sim_dq_out.asnumpy(), dq_out, rtol=1e-5)
+    np.testing.assert_allclose(sim_dq_out.numpy(), dq_out, rtol=1e-5)
 
 
 def test_simulated_dequantize():
@@ -109,10 +109,10 @@ def test_dynamic_channels():
     input_data = relay.var("input_data", shape=data.shape, dtype="float32")
     scale = relay.var("scale", shape=[relay.Any()], dtype="float32")
     zp = relay.var("zp", shape=[relay.Any()], dtype="int32")
-    dtype = relay.var("dtype", shape=[])
+    dtype = relay.var("dtype", shape=[], dtype="int32")
     vm = build_simulated_dequantize(input_data, scale, zp, dtype, axis=0)
     sim_dq_out = vm.invoke("main", input_data=data_fp, scale=scale_np, zp=zp_np, dtype=dtype_np)
-    np.testing.assert_allclose(sim_dq_out.asnumpy(), dq_out, rtol=1e-5)
+    np.testing.assert_allclose(sim_dq_out.numpy(), dq_out, rtol=1e-5)
 
     # Now get the perchannel quantize output and compare without recompiling.
     scale_np = np.array([0.5, 0.25]).astype("float32")
@@ -128,7 +128,7 @@ def test_dynamic_channels():
     )
     # Run the simulated quantize without recompiling and confirm results match.
     sim_dq_out = vm.invoke("main", input_data=data_fp, scale=scale_np, zp=zp_np, dtype=dtype_np)
-    np.testing.assert_allclose(sim_dq_out.asnumpy(), dq_out, rtol=1e-5)
+    np.testing.assert_allclose(sim_dq_out.numpy(), dq_out, rtol=1e-5)
 
 
 def test_dynamic_dtype():
@@ -150,10 +150,10 @@ def test_dynamic_dtype():
     input_data = relay.var("input_data", shape=data.shape, dtype="float32")
     scale = relay.var("scale", shape=[relay.Any()], dtype="float32")
     zp = relay.var("zp", shape=[relay.Any()], dtype="int32")
-    dtype = relay.var("dtype", shape=[])
+    dtype = relay.var("dtype", shape=[], dtype="int32")
     vm = build_simulated_dequantize(input_data, scale, zp, dtype)
     sim_dq_out = vm.invoke("main", input_data=data_fp, scale=scale_np, zp=zp_np, dtype=dtype_np)
-    np.testing.assert_allclose(sim_dq_out.asnumpy(), dq_out, rtol=1e-5)
+    np.testing.assert_allclose(sim_dq_out.numpy(), dq_out, rtol=1e-5)
 
     # Now test int8 to float32 compilation.
     data = np.random.uniform(low=0, high=255, size=[2, 5]).astype("int8")
@@ -168,7 +168,7 @@ def test_dynamic_dtype():
     # Run the simulated quantize without recompiling and confirm results match.
     dtype_np = np.int32(SQNN_DTYPE_TO_CODE["int8"])
     sim_dq_out = vm.invoke("main", input_data=data_fp, scale=scale_np, zp=zp_np, dtype=dtype_np)
-    np.testing.assert_allclose(sim_dq_out.asnumpy(), dq_out, rtol=1e-5)
+    np.testing.assert_allclose(sim_dq_out.numpy(), dq_out, rtol=1e-5)
 
 
 if __name__ == "__main__":

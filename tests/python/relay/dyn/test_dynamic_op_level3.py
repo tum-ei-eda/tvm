@@ -31,16 +31,17 @@ def verify_func(func, data, ref_res, target_device=tvm.testing.enabled_targets()
     for target, dev in target_device:
         for kind in ["vm", "debug"]:
             mod = tvm.ir.IRModule.from_expr(func)
-            intrp = relay.create_executor(kind, mod=mod, device=dev, target=target)
-            op_res = intrp.evaluate()(*data)
+            op_res = relay.create_executor(kind, mod=mod, device=dev, target=target).evaluate()(
+                *data
+            )
             if isinstance(op_res, tvm.runtime.container.ADT):
                 assert len(op_res) == len(
                     ref_res
                 ), "Outputs from TVM and Python implementation must be equal "
                 for op_result, ref_result in zip(op_res, ref_res):
-                    tvm.testing.assert_allclose(op_result.asnumpy(), ref_result, rtol=1e-5)
+                    tvm.testing.assert_allclose(op_result.numpy(), ref_result, rtol=1e-5)
             else:
-                tvm.testing.assert_allclose(op_res.asnumpy(), ref_res, rtol=1e-5)
+                tvm.testing.assert_allclose(op_res.numpy(), ref_res, rtol=1e-5)
             relay.backend.compile_engine.get().clear()
 
 

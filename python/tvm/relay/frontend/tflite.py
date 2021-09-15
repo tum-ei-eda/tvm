@@ -91,6 +91,7 @@ class OperatorConverter(object):
             "EQUAL": self.convert_equal,
             "EXP": self.convert_exp,
             "EXPAND_DIMS": self.convert_expand_dims,
+            "FAKE_QUANT": self.convert_fake_quant,
             "FILL": self.convert_fill,
             "FLOOR_DIV": self.convert_floor_div,
             "FLOOR_MOD": self.convert_floor_mod,
@@ -251,7 +252,30 @@ class OperatorConverter(object):
             raise ImportError("The tflite package must be installed")
 
         op_code_list_idx = op.OpcodeIndex()
-        op_code_id = self.model.OperatorCodes(op_code_list_idx).BuiltinCode()
+
+        op_c = self.model.OperatorCodes(op_code_list_idx)
+        # In TFlite 2.4.x there was a change where the type of the field that contained
+        # the builtin code changed from int8 to int32 in the flat buffer representation.
+        # However, to retain support for old flat buffers that were created, they retained
+        # the original 8 bit field, but named it "deprecated_builtin_code" in TFLite 2.4.
+        # This means that the API function BuiltinCode() which originally returned the value
+        # of the 8 bit field would now look for the value in the new int32 field in the
+        # schema and DeprecatedBuiltinCode() will look at the old 8 bit field.
+        # In TFLite 2.4, if the opcode value is less than 127, it can be in either field
+        # (however, if it is only in the "builtin_code" field, the model is not backward
+        # compatible), so similarly to TFLite 2.4 reader, we'll pick the higher value of the
+        # two fields.
+        # Remember however that this value came into existence only after Tensorflow
+        # lite 2.4.x and hence encase it in a try -except block.
+        # Phew !
+        try:
+            opc = max(op_c.DeprecatedBuiltinCode(), op_c.BuiltinCode())
+        except AttributeError:
+            # In versions before 2.4 the int8 field that holds the builtin code is accessed
+            # by BuiltinCode() and DeprecatedBuiltinCode() doesn't exist
+            opc = op_c.BuiltinCode()
+
+        op_code_id = opc
         try:
             op_code_str = self.builtin_op_code[op_code_id]
         except KeyError:
@@ -422,9 +446,9 @@ class OperatorConverter(object):
         rhs_zero_point = rhs_tensor.qnn_params["zero_point"]
         # 0.1 + 0.2 != 0.3
         return np.allclose(
-            lhs_scale.data.asnumpy(), rhs_scale.data.asnumpy(), rtol=1e-5, atol=1e-5
+            lhs_scale.data.numpy(), rhs_scale.data.numpy(), rtol=1e-5, atol=1e-5
         ) and np.allclose(
-            lhs_zero_point.data.asnumpy(), rhs_zero_point.data.asnumpy(), rtol=1e-5, atol=1e-5
+            lhs_zero_point.data.numpy(), rhs_zero_point.data.numpy(), rtol=1e-5, atol=1e-5
         )
 
     def is_quantized(self, op):
@@ -434,7 +458,7 @@ class OperatorConverter(object):
         return first_tensor.qnn_params is not None
 
     def quantize(self, expr, tensor_to_quantize):
-        """ Helper function to quantize a tensor with Relay """
+        """Helper function to quantize a tensor with Relay"""
         tensor_type = tensor_to_quantize.tensor.Type()
         tensor_type_str = self.get_tensor_type_str(tensor_type)
         quantized = _qnn.op.quantize(
@@ -446,7 +470,7 @@ class OperatorConverter(object):
         return quantized
 
     def dequantize(self, expr, tensor):
-        """ Helper function to dequantize a tensor with Relay """
+        """Helper function to dequantize a tensor with Relay"""
         dequantized = _qnn.op.dequantize(
             data=expr,
             input_scale=tensor.qnn_params["scale"],
@@ -607,7 +631,7 @@ class OperatorConverter(object):
         # Options - align_corners (bool)
         resize_options = None
         align_corners = False
-        bilinear_method = method == "bilinear"
+        bilinear_method = method == "linear"
         if bilinear_method:
             assert op.BuiltinOptionsType() == BuiltinOptions.ResizeBilinearOptions
             resize_options = ResizeBilinearOptions()
@@ -619,12 +643,15 @@ class OperatorConverter(object):
             op_options = op.BuiltinOptions()
             resize_options.Init(op_options.Bytes, op_options.Pos)
             align_corners = resize_options.AlignCorners()
+            half_pixel_centers = resize_options.HalfPixelCenters()
 
         # Use layout NHWC
         coord_trans = "align_corners" if align_corners else "asymmetric"
+        coord_trans = "half_pixel" if half_pixel_centers else coord_trans
+
         if bilinear_method and input_tensor.qnn_params:
             in_expr = self.dequantize(in_expr, input_tensor)
-        out = _op.image.resize(
+        out = _op.image.resize2d(
             in_expr, target_size, "NHWC", method, coordinate_transformation_mode=coord_trans
         )
         if bilinear_method and output_tensor.qnn_params:
@@ -633,14 +660,14 @@ class OperatorConverter(object):
 
     def convert_resize_bilinear(self, op):
         """Convert TFLite RESIZE_BILINEAR"""
-        return self._convert_resize("bilinear", op)
+        return self._convert_resize("linear", op)
 
     def convert_resize_nearest_neighbor(self, op):
         """Convert TFLite RESIZE_NEAREST_NEIGHBOR"""
         return self._convert_resize("nearest_neighbor", op)
 
     def convert_l2_normalization(self, op):
-        """Convert TFLite L2_NORMALIZATION """
+        """Convert TFLite L2_NORMALIZATION"""
         try:
             from tflite.BuiltinOptions import BuiltinOptions
             from tflite.L2NormOptions import L2NormOptions
@@ -683,7 +710,7 @@ class OperatorConverter(object):
         return out
 
     def convert_lrn(self, op):
-        """Convert TFLite LOCAL_RESPONSE_NORMALIZATION """
+        """Convert TFLite LOCAL_RESPONSE_NORMALIZATION"""
         try:
             from tflite.BuiltinOptions import BuiltinOptions
             from tflite.LocalResponseNormalizationOptions import LocalResponseNormalizationOptions
@@ -769,11 +796,18 @@ class OperatorConverter(object):
         """Convert TFLite TANH"""
         input_tensors = self.get_input_tensors(op)
         assert len(input_tensors) == 1, "input tensors length should be 1"
-
         input_tensor = input_tensors[0]
         in_expr = self.get_expr(input_tensor.tensor_idx)
-        out = _op.tanh(in_expr)
 
+        output_tensors = self.get_output_tensors(op)
+        assert len(output_tensors) == 1, "output tensors length should be 1"
+        output_tensor = output_tensors[0]
+
+        if input_tensor.qnn_params:
+            in_expr = self.dequantize(in_expr, input_tensor)
+        out = _op.tanh(in_expr)
+        if output_tensor.qnn_params:
+            out = self.quantize(out, output_tensor)
         return out
 
     def convert_range(self, op):
@@ -2382,7 +2416,7 @@ class OperatorConverter(object):
         return out
 
     def convert_topk_v2(self, op):
-        """ Convert TFLite TOPK_v2 """
+        """Convert TFLite TOPK_v2"""
         input_tensors = self.get_input_tensors(op)
         assert len(input_tensors) == 2, "input tensors length should be 2"
         input_tensor = input_tensors[0]
@@ -2532,7 +2566,7 @@ class OperatorConverter(object):
             ), "TFLite PADV2 requires input and output scale and zero points to be equal"
 
             # The pad value for quantized pad is the input zero point by default.
-            pad_value = float(input_tensor.qnn_params["zero_point"].data.asnumpy())
+            pad_value = float(input_tensor.qnn_params["zero_point"].data.numpy())
 
         if len(input_tensors) == 3:
             pad_value = self.get_tensor_value(input_tensors[2])
@@ -3148,7 +3182,7 @@ class OperatorConverter(object):
         input_expr = self.get_tensor_expr(input_tensors[0])
         axis = self.get_tensor_value(input_tensors[1])
         if isinstance(axis, np.ndarray):
-            assert len(axis) == 1, "only one value is expected."
+            assert axis.size == 1, "only one value is expected."
             axis = int(axis)
 
         ndims = len(input_tensors[0].tensor.ShapeAsNumpy())
@@ -3303,6 +3337,56 @@ class OperatorConverter(object):
 
         self.set_prefetched_node(output_tensor.tensor_idx, dense_weight)
 
+    def convert_fake_quant(self, op):
+        """Convert TFLite FAKE_QUANT"""
+        input_tensors = self.get_input_tensors(op)
+        assert len(input_tensors) == 1, "input tensors length should be 1"
+
+        input_tensor = input_tensors[0]
+        in_expr = self.get_expr(input_tensor.tensor_idx)
+
+        from tflite.BuiltinOptions import BuiltinOptions
+        from tflite.FakeQuantOptions import FakeQuantOptions
+
+        assert op.BuiltinOptionsType() == BuiltinOptions.FakeQuantOptions
+
+        op_options = op.BuiltinOptions()
+        fake_quant_options = FakeQuantOptions()
+        fake_quant_options.Init(op_options.Bytes, op_options.Pos)
+
+        opt_min = fake_quant_options.Min()
+        opt_max = fake_quant_options.Max()
+        narrow_range = fake_quant_options.NarrowRange()
+        num_bits = fake_quant_options.NumBits()
+
+        assert 2 <= num_bits <= 16
+
+        quant_min = 1 if narrow_range else 0
+        quant_max = (1 << num_bits) - 1
+        scale = (opt_max - opt_min) / (quant_max - quant_min)
+
+        zero_point_from_min = quant_min - opt_min / scale
+        if zero_point_from_min <= quant_min:
+            nudged_zero_point = quant_min
+        elif zero_point_from_min >= quant_max:
+            nudged_zero_point = quant_max
+        else:
+            nudged_zero_point = round(zero_point_from_min)
+
+        nudged_min = (quant_min - nudged_zero_point) * scale
+        nudged_max = (quant_max - nudged_zero_point) * scale
+
+        nudged_min_expr = _op.const(nudged_min)
+        clamped = _op.clip(in_expr, nudged_min, nudged_max)
+        clamped_shifted = _op.subtract(clamped, nudged_min_expr)
+
+        half = _op.const(0.5)
+        one = _op.const(1.0)
+        scale_expr = _op.const(scale)
+        inv_scale = _op.divide(one, scale_expr)
+        rounded = _op.floor(_op.add(_op.multiply(clamped_shifted, inv_scale), half))
+        return _op.add(_op.multiply(rounded, scale_expr), nudged_min_expr)
+
     def get_expr(self, input_tensor_idx):
         return self.exp_tab.get_expr(get_tensor_name(self.subgraph, input_tensor_idx))
 
@@ -3321,7 +3405,7 @@ class OperatorConverter(object):
         return self.prefetched_nodes[get_tensor_name(self.subgraph, input_tensor_idx)]
 
     def get_tensor_expr(self, tensor, is_sparse=False):
-        """ Return the Relay expr for tensor. """
+        """Return the Relay expr for tensor."""
         if self.has_expr(tensor.tensor_idx):
             expr = self.get_expr(tensor.tensor_idx)
         else:
@@ -3330,7 +3414,7 @@ class OperatorConverter(object):
         return expr
 
     def get_tensor_shape(self, tensor_wrapper):
-        """ Returns tensor shape. Infers shape if the shape is empty. """
+        """Returns tensor shape. Infers shape if the shape is empty."""
         assert isinstance(tensor_wrapper, TensorWrapper), "Expecting TensorWrapper here"
         return (
             tensor_wrapper.tensor.ShapeAsNumpy()
@@ -3341,7 +3425,7 @@ class OperatorConverter(object):
 
 # pylint: disable=no-else-return
 def prepare_dense_matrix_from_sparse(sparse_tensor, sparse_tensor_value, sparse_tensor_type):
-    """ Prepare sparse indices and dense matrix from TFLite sparse parameters. """
+    """Prepare sparse indices and dense matrix from TFLite sparse parameters."""
     # The function is implemented based on TFLite sparse parameter specifications
     # Please refer
     # https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/schema/schema.fbs#L89
@@ -3441,7 +3525,7 @@ def prepare_dense_matrix_from_sparse(sparse_tensor, sparse_tensor_value, sparse_
     indices_list = []
 
     # Below function iterates through each applicable indices per dimension
-    # based on format type specified and finaly produce the dense matrix and the NZ indices.
+    # based on format type specified and finally produce the dense matrix and the NZ indices.
     def _def_prepare_dense_matrix_from_sparse(indices, level, prev_idx):
         if level == len(indices):
             start_pos = 0
@@ -3481,21 +3565,21 @@ def prepare_dense_matrix_from_sparse(sparse_tensor, sparse_tensor_value, sparse_
 
 
 def get_scalar_from_constant(expr):
-    """ Returns scalar value from Relay constant scalar. """
+    """Returns scalar value from Relay constant scalar."""
     assert (
         isinstance(expr, _expr.Constant) and not expr.data.shape
     ), "Expr is not a constant scalar."
-    value = expr.data.asnumpy()
+    value = expr.data.numpy()
     assert value.dtype == np.dtype(np.int32) or value.dtype == np.dtype(
         np.float32
     ), "value must be float32/int32"
-    return np.asscalar(value)
+    return value.item(0)
 
 
 def get_tensor_from_constant(expr):
-    """ Returns tensor of values from Relay constant node. """
+    """Returns tensor of values from Relay constant node."""
     assert isinstance(expr, _expr.Constant)
-    value = expr.data.asnumpy()
+    value = expr.data.numpy()
     assert value.dtype == np.dtype(np.int32) or value.dtype == np.dtype(
         np.float32
     ), "value must be float32/int32"

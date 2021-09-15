@@ -130,9 +130,9 @@ def _verify_linked_param(dtype, lib, mod, graph, name):
     arr_data = (_get_ctypes_dtype(dtype) * np.prod(gen_param.shape)).from_address(param_ptr.value)
     arr = np.ndarray(shape=gen_param.shape, dtype=gen_param.dtype, buffer=arr_data, order="C")
     if "int" in gen_param.dtype:
-        np.testing.assert_equal(gen_param.asnumpy(), arr)
+        np.testing.assert_equal(gen_param.numpy(), arr)
     else:
-        np.testing.assert_allclose(gen_param.asnumpy(), arr)
+        np.testing.assert_allclose(gen_param.numpy(), arr)
     return dtype == gen_param.dtype
 
 
@@ -226,9 +226,9 @@ def test_llvm_link_params():
             unlinked_output = _run_unlinked(lib)
 
         if "int" in dtype:
-            np.testing.assert_equal(unlinked_output.asnumpy(), linked_output.asnumpy())
+            np.testing.assert_equal(unlinked_output.numpy(), linked_output.numpy())
         else:
-            np.testing.assert_allclose(unlinked_output.asnumpy(), linked_output.asnumpy())
+            np.testing.assert_allclose(unlinked_output.numpy(), linked_output.numpy())
 
 
 def _get_c_datatype(dtype):
@@ -278,7 +278,7 @@ def test_c_link_params():
             lib.lib.save(temp_dir.relpath("test.c"), "c")
             c_dtype = _get_c_datatype(dtype)
             src_lines = src.split("\n")
-            param = lib.params["p0"].asnumpy().reshape(np.prod(KERNEL_SHAPE))
+            param = lib.params["p0"].numpy().reshape(np.prod(KERNEL_SHAPE))
             param_def = f"static const {c_dtype} __tvm_param__p0[{np.prod(param.shape)}] = {{"
             for i, line in enumerate(src_lines):
                 if line == param_def:
@@ -341,14 +341,14 @@ def test_c_link_params():
             unlinked_output = _run_unlinked(lib_mod)
 
         if "int" in dtype:
-            np.testing.assert_equal(unlinked_output.asnumpy(), linked_output.asnumpy())
+            np.testing.assert_equal(unlinked_output.numpy(), linked_output.numpy())
         else:
-            np.testing.assert_allclose(unlinked_output.asnumpy(), linked_output.asnumpy())
+            np.testing.assert_allclose(unlinked_output.numpy(), linked_output.numpy())
 
 
 @tvm.testing.requires_micro
 def test_crt_link_params():
-    import tvm.micro
+    from tvm import micro
 
     for dtype in LINKABLE_DTYPES:
         mod, param_init = _make_mod_and_params(dtype)
@@ -356,40 +356,27 @@ def test_crt_link_params():
         main_func = mod["main"]
         target = "c --system-lib --runtime=c --link-params"
         with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}):
-            graph_json, lib, params = tvm.relay.build(mod, target, params=param_init)
-            assert set(params.keys()) == {"p0", "p1"}  # NOTE: op folded
+            factory = tvm.relay.build(mod, target, params=param_init)
+            assert set(factory.get_params().keys()) == {"p0", "p1"}  # NOTE: op folded
 
-            workspace = tvm.micro.Workspace()
-            compiler = tvm.micro.DefaultCompiler(target=target)
-            opts = tvm.micro.default_options(
-                os.path.join(tvm.micro.get_standalone_crt_dir(), "template", "host")
+            temp_dir = tvm.contrib.utils.tempdir()
+            template_project_dir = os.path.join(
+                tvm.micro.get_standalone_crt_dir(), "template", "host"
             )
-            opts["bin_opts"]["ldflags"].append("-DTVM_HOST_USE_GRAPH_EXECUTOR_MODULE")
-
-            micro_binary = tvm.micro.build_static_runtime(
-                workspace,
-                compiler,
-                lib,
-                compiler_options=opts,
-                extra_libs=[
-                    tvm.micro.get_standalone_crt_lib(m)
-                    for m in ("memory", "graph_executor_module", "graph_executor")
-                ],
+            project = tvm.micro.generate_project(
+                template_project_dir, factory, temp_dir / "project", {"verbose": 1}
             )
-
-            flasher_kw = {
-                "debug": False,
-            }
-            flasher = compiler.flasher(**flasher_kw)
-            with tvm.micro.Session(binary=micro_binary, flasher=flasher) as sess:
+            project.build()
+            project.flash()
+            with tvm.micro.Session(project.transport()) as sess:
                 graph_rt = tvm.micro.session.create_local_graph_executor(
-                    graph_json, sess.get_system_lib(), sess.device
+                    factory.get_graph_json(), sess.get_system_lib(), sess.device
                 )
 
                 # NOTE: not setting params here.
                 graph_rt.set_input("rand_input", rand_input)
                 graph_rt.run()
-                linked_output = graph_rt.get_output(0).asnumpy()
+                linked_output = graph_rt.get_output(0).numpy()
 
         with tvm.transform.PassContext(opt_level=3):
             lib = tvm.relay.build(mod, "llvm --system-lib", params=param_init)
@@ -399,7 +386,7 @@ def test_crt_link_params():
                 graph_rt = tvm.contrib.graph_executor.create(graph_json, mod, tvm.cpu(0))
                 graph_rt.set_input("rand_input", rand_input, **lowered_params)
                 graph_rt.run()
-                return graph_rt.get_output(0).asnumpy()
+                return graph_rt.get_output(0).numpy()
 
             unlinked_output = _run_unlinked(lib)
 

@@ -36,17 +36,20 @@ namespace tir {
  */
 class LCADetector : public StmtExprVisitor {
  public:
-  static Map<Buffer, Stmt> Detect(const PrimFunc& func) {
+  static Map<Buffer, Optional<Stmt>> Detect(const PrimFunc& func) {
     LCADetector detector;
     for (const auto& kv : func->buffer_map) {
       const Buffer& buffer = kv.second;
       detector.buffer_var_map_.emplace(buffer->data.get(), buffer.get());
     }
+
     detector(func->body);
     // Prepare the return
-    Map<Buffer, Stmt> buffer_lca;
+    Map<Buffer, Optional<Stmt>> buffer_lca;
     for (const auto& kv : detector.buffer_lca_) {
-      buffer_lca.Set(GetRef<Buffer>(kv.first), GetRef<Stmt>(kv.second->stmt));
+      const Buffer& buffer = GetRef<Buffer>(kv.first);
+      const Optional<Stmt> stmt = kv.second ? GetRef<Optional<Stmt>>(kv.second->stmt) : NullOpt;
+      buffer_lca.Set(buffer, stmt);
     }
     return buffer_lca;
   }
@@ -82,9 +85,17 @@ class LCADetector : public StmtExprVisitor {
     for (const Buffer& buf : op->alloc_buffers) {
       buffer_var_map_.emplace(buf->data.get(), buf.get());
     }
+
     const ScopeInfo* parent_scope = ancestor_scopes_.back();
     auto* current_scope = arena_.make<ScopeInfo>(parent_scope, op, n);
+
     ancestor_scopes_.push_back(current_scope);
+    // Update match_buffers
+    for (const MatchBufferRegion& match_buffer : op->match_buffers) {
+      UpdateBufferLCA(match_buffer->source->buffer.get());
+      match_buffers_.insert(match_buffer->buffer.get());
+    }
+
     StmtExprVisitor::VisitStmt_(op);
     ancestor_scopes_.pop_back();
   }
@@ -126,12 +137,14 @@ class LCADetector : public StmtExprVisitor {
   }
 
   void UpdateBufferLCA(const BufferNode* buffer) {
-    const ScopeInfo*& lca = buffer_lca_[buffer];
-    lca = LowestCommonAncestor(lca, ancestor_scopes_.back());
+    if (match_buffers_.find(buffer) == match_buffers_.end()) {
+      // Ingore buffer created by block match_buffer
+      const ScopeInfo*& lca = buffer_lca_[buffer];
+      lca = LowestCommonAncestor(lca, ancestor_scopes_.back());
+    }
   }
 
   static const ScopeInfo* LowestCommonAncestor(const ScopeInfo* lhs, const ScopeInfo* rhs) {
-    ICHECK(lhs || rhs);
     if (lhs == nullptr) return rhs;
     if (rhs == nullptr) return lhs;
     while (lhs->parent_scope_info != nullptr &&  //
@@ -162,11 +175,15 @@ class LCADetector : public StmtExprVisitor {
   std::unordered_map<const BufferNode*, const ScopeInfo*> buffer_lca_ = {};
   /*! \brief The map from Buffer data to the Buffer. */
   std::unordered_map<const VarNode*, const BufferNode*> buffer_var_map_ = {};
+  /*! \brief The match buffers inside blocks. */
+  std::unordered_set<const BufferNode*> match_buffers_ = {};
   /*! \brief Internal arena. */
   support::Arena arena_;
 };
 
-Map<Buffer, Stmt> DetectBufferAccessLCA(const PrimFunc& func) { return LCADetector::Detect(func); }
+Map<Buffer, Optional<Stmt>> DetectBufferAccessLCA(const PrimFunc& func) {
+  return LCADetector::Detect(func);
+}
 
 TVM_REGISTER_GLOBAL("tir.analysis.detect_buffer_access_lca").set_body_typed(DetectBufferAccessLCA);
 }  // namespace tir

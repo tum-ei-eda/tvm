@@ -279,6 +279,14 @@ TVM_DLL const Op& tvm_struct_get();
 TVM_DLL const Op& tvm_struct_set();
 
 /*!
+ * \brief See pseudo code
+ * Type lookup_param(String param_name) {
+ *     return __tvm_param__param_name;
+ * }
+ */
+TVM_DLL const Op& lookup_param();
+
+/*!
  * \brief See pesudo code
  *
  *  void tvm_throw_last_error() {
@@ -592,6 +600,20 @@ TVM_DLL const Op& vectorcombine();
  * \brief atomic add instruction, corresponding e.g. to atomicAdd in CUDA
  */
 TVM_DLL const Op& atomic_add();
+/*!
+ * \brief Create a texture 2d memory allocation
+ */
+TVM_DLL const Op& texture2d_alloca();
+
+/*!
+ * \brief Store to texture 2d memory
+ */
+TVM_DLL const Op& texture2d_store();
+
+/*!
+ * \brief Load from texture 2d memory
+ */
+TVM_DLL const Op& texture2d_load();
 
 /*! \brief The kind of structure field info used in intrinsic */
 enum TVMStructFieldKind : int {

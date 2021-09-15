@@ -162,7 +162,7 @@ data_shape = (batch_size,) + image_shape
 ######################################################################
 # Compile The Graph
 # -----------------
-# To compile the graph, we call the :any:`relay.build` function
+# To compile the graph, we call the :py:func:`relay.build` function
 # with the graph configuration and parameters. However, You cannot to
 # deploy a x86 program on a device with ARM instruction set. It means
 # Relay also needs to know the compilation option of target device,
@@ -226,5 +226,5 @@ module.run()
 # get output
 out = module.get_output(0)
 # get top1 result
-top1 = np.argmax(out.asnumpy())
+top1 = np.argmax(out.numpy())
 print("TVM prediction top-1: {}".format(synset[top1]))

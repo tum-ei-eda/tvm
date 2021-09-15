@@ -46,7 +46,7 @@ logger = logging.getLogger("TVMC")
 
 @register_parser
 def add_tune_parser(subparsers):
-    """ Include parser for 'tune' subcommand """
+    """Include parser for 'tune' subcommand"""
 
     parser = subparsers.add_parser("tune", help="auto-tune a model")
     parser.set_defaults(func=drive_tune)
@@ -116,7 +116,7 @@ def add_tune_parser(subparsers):
         help="the host compilation target, defaults to 'llvm'",
         default="llvm",
     )
-    parser.add_argument("--timeout", default=10, help="compilation timeout, in seconds")
+    parser.add_argument("--timeout", type=int, default=10, help="compilation timeout, in seconds")
     parser.add_argument(
         "--trials",
         type=int,
@@ -142,7 +142,7 @@ def add_tune_parser(subparsers):
 
     auto_scheduler_group = parser.add_argument_group(
         "Autoscheduler options",
-        "Autoscheduler options, used when --enabled-auto-scheduler is provided",
+        "Autoscheduler options, used when --enable-autoscheduler is provided",
     )
 
     auto_scheduler_group.add_argument(
@@ -261,7 +261,7 @@ def drive_tune(args):
                 "need to provide an RPC tracker key (--rpc-key) for remote tuning"
             )
     else:
-        rpc_host_name = None
+        rpc_hostname = None
         rpc_port = None
 
     tune_model(
@@ -271,7 +271,7 @@ def drive_tune(args):
         prior_records=args.tuning_records,
         enable_autoscheduler=args.enable_autoscheduler,
         rpc_key=args.rpc_key,
-        hostname=rpc_host_name,
+        hostname=rpc_hostname,
         port=rpc_port,
         trials=args.trials,
         target_host=args.target_host,
@@ -331,7 +331,7 @@ def tune_model(
         faster kernels for compatible model-target pairs.
     rpc_key : str, optional
         The RPC tracker key of the target device. Required when rpc_tracker is provided.
-    host_name : str, optional
+    hostname : str, optional
         The IP address of an RPC tracker, used when benchmarking remotely.
     port : int or str, optional
         The port of the RPC tracker to connect to. Defaults to 9090.

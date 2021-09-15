@@ -135,7 +135,7 @@ except AttributeError:
 ###############################################################################
 # Lets run TFLite pre-quantized model inference and get the TFLite prediction.
 def run_tflite_model(tflite_model_buf, input_data):
-    """ Generic function to execute TFLite """
+    """Generic function to execute TFLite"""
     try:
         from tensorflow import lite as interpreter_wrapper
     except ImportError:
@@ -173,7 +173,7 @@ def run_tvm(lib):
     rt_mod = graph_executor.GraphModule(lib["default"](tvm.cpu(0)))
     rt_mod.set_input("input", data)
     rt_mod.run()
-    tvm_res = rt_mod.get_output(0).asnumpy()
+    tvm_res = rt_mod.get_output(0).numpy()
     tvm_pred = np.squeeze(tvm_res).argsort()[-5:][::-1]
     return tvm_pred, rt_mod
 
@@ -232,9 +232,7 @@ print("TFLite Top-5 labels:", tflite_pred)
 # Here we give an example of how to measure performance of TVM compiled models.
 n_repeat = 100  # should be bigger to make the measurement more accurate
 dev = tvm.cpu(0)
-ftimer = rt_mod.module.time_evaluator("run", dev, number=1, repeat=n_repeat)
-prof_res = np.array(ftimer().results) * 1e3
-print("Elapsed average ms:", np.mean(prof_res))
+print(rt_mod.benchmark(dev, number=1, repeat=n_repeat))
 
 ######################################################################
 # .. note::

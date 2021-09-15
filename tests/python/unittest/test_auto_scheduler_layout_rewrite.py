@@ -26,7 +26,7 @@ import tvm.testing
 from tvm import topi
 from tvm import auto_scheduler, te
 
-from test_auto_scheduler_common import get_tiled_matmul, matmul_auto_scheduler_test
+from tvm.testing.auto_scheduler import get_tiled_matmul, matmul_auto_scheduler_test
 
 
 def test_apply_steps_with_layout_rewrite():
@@ -130,8 +130,8 @@ def test_correctness_layout_rewrite_rewrite_for_preTransformed():
         func_ref(*args_ref)
         dev.sync()
 
-        tvm.testing.assert_allclose(args[0].asnumpy(), args_ref[0].asnumpy(), atol=1e-3, rtol=1e-3)
-        tvm.testing.assert_allclose(args[2].asnumpy(), args_ref[2].asnumpy(), atol=1e-3, rtol=1e-3)
+        tvm.testing.assert_allclose(args[0].numpy(), args_ref[0].numpy(), atol=1e-3, rtol=1e-3)
+        tvm.testing.assert_allclose(args[2].numpy(), args_ref[2].numpy(), atol=1e-3, rtol=1e-3)
         del measure_ctx
 
 
@@ -177,9 +177,9 @@ def test_correctness_layout_rewrite_insert_transform_stage():
         func_ref(*args_ref)
         dev.sync()
 
-        tvm.testing.assert_allclose(args[0].asnumpy(), args_ref[0].asnumpy(), atol=1e-3, rtol=1e-3)
-        tvm.testing.assert_allclose(args[1].asnumpy(), args_ref[1].asnumpy(), atol=1e-3, rtol=1e-3)
-        tvm.testing.assert_allclose(args[2].asnumpy(), args_ref[2].asnumpy(), atol=1e-3, rtol=1e-3)
+        tvm.testing.assert_allclose(args[0].numpy(), args_ref[0].numpy(), atol=1e-3, rtol=1e-3)
+        tvm.testing.assert_allclose(args[1].numpy(), args_ref[1].numpy(), atol=1e-3, rtol=1e-3)
+        tvm.testing.assert_allclose(args[2].numpy(), args_ref[2].numpy(), atol=1e-3, rtol=1e-3)
         del measure_ctx
 
 

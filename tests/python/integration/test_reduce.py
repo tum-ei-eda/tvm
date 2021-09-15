@@ -14,10 +14,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import pytest
+
 import tvm
-from tvm import te
+from tvm import te, topi
 import numpy as np
 import tvm.testing
+import tvm.topi.testing
 
 
 @tvm.testing.requires_gpu
@@ -54,9 +57,9 @@ def test_reduce_prims():
             x = tvm.nd.array(np.random.uniform(size=(n, m)).astype(A.dtype), dev)
             y = tvm.nd.array(np.zeros(n, dtype=B.dtype), dev)
             freduce(x, y)
-            npy = y.asnumpy()
+            npy = y.numpy()
             npy[:2] = 0
-            res = np_reducer(x.asnumpy(), axis=1)
+            res = np_reducer(x.numpy(), axis=1)
             res[:2] = 0
             tvm.testing.assert_allclose(npy, res, rtol=1e-4)
 
@@ -90,8 +93,8 @@ def test_init_imm():
         a = tvm.nd.array(np.random.uniform(size=(n,)).astype(A.dtype), dev)
         b = tvm.nd.array(np.zeros((), dtype=B.dtype), dev)
         fsum(a, b)
-        res = 10.0 + np.sum(a.asnumpy(), axis=0)
-        tvm.testing.assert_allclose(b.asnumpy(), res, rtol=1e-4)
+        res = 10.0 + np.sum(a.numpy(), axis=0)
+        tvm.testing.assert_allclose(b.numpy(), res, rtol=1e-4)
 
     check_target()
 
@@ -121,8 +124,8 @@ def test_init():
         ii = tvm.nd.array(np.random.uniform(size=(n, n)).astype(B.dtype), dev)
         b = tvm.nd.array(np.zeros((n, n), dtype=B.dtype), dev)
         mmult(a, c, ii, b)
-        res = ii.asnumpy() + np.matmul(a.asnumpy(), c.asnumpy())
-        tvm.testing.assert_allclose(b.asnumpy(), res, rtol=1e-4)
+        res = ii.numpy() + np.matmul(a.numpy(), c.numpy())
+        tvm.testing.assert_allclose(b.numpy(), res, rtol=1e-4)
 
     check_target()
 
@@ -149,8 +152,8 @@ def test_rfactor():
         a = tvm.nd.array(np.random.uniform(size=(n,)).astype(A.dtype), dev)
         b = tvm.nd.array(np.zeros((), dtype=B.dtype), dev)
         fsum(a, b)
-        res = np.sum(a.asnumpy(), axis=0)
-        tvm.testing.assert_allclose(b.asnumpy(), res, rtol=1e-4)
+        res = np.sum(a.numpy(), axis=0)
+        tvm.testing.assert_allclose(b.numpy(), res, rtol=1e-4)
 
     check_target()
 
@@ -183,8 +186,8 @@ def test_rfactor_init():
         ii = tvm.nd.array(np.random.uniform(size=(n, n)).astype(B.dtype), dev)
         b = tvm.nd.array(np.zeros((n, n), dtype=B.dtype), dev)
         mmult(a, c, ii, b)
-        res = ii.asnumpy() + np.matmul(a.asnumpy(), c.asnumpy())
-        tvm.testing.assert_allclose(b.asnumpy(), res, rtol=1e-4)
+        res = ii.numpy() + np.matmul(a.numpy(), c.numpy())
+        tvm.testing.assert_allclose(b.numpy(), res, rtol=1e-4)
 
     check_target()
 
@@ -211,8 +214,8 @@ def test_rfactor_factor_axis():
         a = tvm.nd.array(np.random.uniform(size=(n,)).astype(A.dtype), dev)
         b = tvm.nd.array(np.zeros((), dtype=B.dtype), dev)
         fsum(a, b)
-        res = np.sum(a.asnumpy(), axis=0)
-        tvm.testing.assert_allclose(b.asnumpy(), res, rtol=1e-4)
+        res = np.sum(a.numpy(), axis=0)
+        tvm.testing.assert_allclose(b.numpy(), res, rtol=1e-4)
 
     check_target()
 
@@ -255,9 +258,9 @@ def test_rfactor_threads():
         a = tvm.nd.array(np.random.uniform(size=(m, n)).astype(A.dtype), dev)
         b = tvm.nd.array(np.zeros(m, dtype=B.dtype), dev)
         fsum(a, b)
-        res = np.sum(a.asnumpy(), axis=1)
+        res = np.sum(a.numpy(), axis=1)
         res[:2] = 0
-        tvm.testing.assert_allclose(b.asnumpy(), res, rtol=1e-4)
+        tvm.testing.assert_allclose(b.numpy(), res, rtol=1e-4)
 
     check_target("vulkan")
     check_target("cuda")
@@ -306,8 +309,8 @@ def test_rfactor_elemwise_threads():
         a = tvm.nd.array(np.random.uniform(size=(m, n)).astype(A.dtype), dev)
         b = tvm.nd.array(np.zeros(m, dtype=B.dtype), dev)
         fsum(a, b)
-        res = np.sum(a.asnumpy(), axis=1) + 2
-        tvm.testing.assert_allclose(b.asnumpy(), res, rtol=1e-4)
+        res = np.sum(a.numpy(), axis=1) + 2
+        tvm.testing.assert_allclose(b.numpy(), res, rtol=1e-4)
 
     check_target("vulkan")
     check_target("cuda")
@@ -354,7 +357,7 @@ def test_argmax():
         nd_res0 = tvm.nd.array(np.zeros(mm, dtype="int32"), dev)
         nd_res1 = tvm.nd.array(np.zeros(mm, dtype="float32"), dev)
         fargmax(nd_idx, nd_val, nd_res0, nd_res1)
-        tvm.testing.assert_allclose(np_res, nd_res0.asnumpy())
+        tvm.testing.assert_allclose(np_res, nd_res0.numpy())
 
     check_target()
 
@@ -411,7 +414,7 @@ def test_rfactor_argmax():
         nd_res0 = tvm.nd.array(np.zeros(mm, dtype="int32"), dev)
         nd_res1 = tvm.nd.array(np.zeros(mm, dtype="float32"), dev)
         fargmax(nd_idx, nd_val, nd_res0, nd_res1)
-        tvm.testing.assert_allclose(np_res, nd_res0.asnumpy())
+        tvm.testing.assert_allclose(np_res, nd_res0.numpy())
 
     check_target("cuda")
     check_target("vulkan")
@@ -456,7 +459,7 @@ def test_warp_reduction1():
         b = tvm.nd.array(b_np, dev)
         b_np = np.max(a_np, axis=1)
         func(a, b)
-        tvm.testing.assert_allclose(b.asnumpy(), b_np, rtol=1e-3, atol=1e-3)
+        tvm.testing.assert_allclose(b.numpy(), b_np, rtol=1e-3, atol=1e-3)
 
     check_target("cuda", m=32, n=256)
     check_target("cuda", m=10, n=20)
@@ -517,23 +520,80 @@ def test_warp_reduction2():
         func(a0, a1, t0, t1)
         t0_np = np.sum(a0_np, axis=1)
         t1_np = np.product(a1_np, axis=1)
-        tvm.testing.assert_allclose(t0.asnumpy(), t0_np, rtol=1e-3, atol=1e-3)
-        tvm.testing.assert_allclose(t1.asnumpy(), t1_np, rtol=1e-3, atol=1e-3)
+        tvm.testing.assert_allclose(t0.numpy(), t0_np, rtol=1e-3, atol=1e-3)
+        tvm.testing.assert_allclose(t1.numpy(), t1_np, rtol=1e-3, atol=1e-3)
 
     check_target("cuda")
     check_target("rocm")
 
 
+@tvm.testing.requires_gpu
+def test_reduce_storage_reuse():
+    target = tvm.target.Target("cuda")
+
+    def run_passes(sch, args):
+        bounds = tvm.te.schedule.InferBound(sch)
+        stmt = tvm.te.schedule.ScheduleOps(sch, bounds)
+        func = tvm.te.schedule.SchedulePostProcToPrimFunc(args, stmt, None)
+        mod = tvm.IRModule.from_expr(func)
+        mod = tvm.tir.transform.Apply(lambda f: f.with_attr("target", target))(mod)
+        return tvm.transform.Sequential(
+            [
+                tvm.tir.transform.StorageFlatten(64),
+                tvm.tir.transform.Simplify(),
+                tvm.tir.transform.StorageRewrite(),
+                tvm.tir.transform.LowerThreadAllreduce(),
+            ]
+        )(mod)
+
+    dev = tvm.device(target.kind.name, 0)
+    shape = (16, 16)
+
+    A = te.placeholder(shape, dtype="float32", name="A")
+    B = topi.nn.softmax(A, axis=1) + 1.0
+
+    with tvm.target.Target(target):
+        s = topi.cuda.schedule_softmax(B)
+
+    mod = run_passes(s, [A, B])
+
+    # Due to the storage rewrite pass, the reduction output storage reduce_temp0 can be reused as
+    # the storage of the next compute.
+
+    # Example:
+    # ...
+    # tir.tvm_thread_allreduce((uint32)1, normal_reduce_temp0[0], 1, reduce_temp0, threadIdx.x)
+    # if ((threadIdx.x < 16)) {
+    #   reduce_temp0[0] = (T_softmax_exp[threadIdx.x]/reduce_temp0[0])
+    # }
+    # ...
+
+    # The LowerThreadAllreduce pass should remap reduce_temp0 on the left hand side of the store
+    # above, as well as the load on the right hand side.
+
+    # Expected output:
+    # ...
+    # red_buf0[0] = tir.tvm_warp_shuffle(mask[0], red_buf0[0], 0, 32, 32)
+    # if ((threadIdx.x < 16)) {
+    #   red_buf0[0] = (T_softmax_exp[threadIdx.x]/red_buf0[0])
+    # }
+    # ...
+
+    def check_store_dst_remapped(op):
+        if isinstance(op, tvm.tir.Store):
+            assert op.buffer_var.name != "reduce_temp0"
+
+    tvm.tir.stmt_functor.post_order_visit(mod["main"].body, check_store_dst_remapped)
+
+    inp = np.random.uniform(size=shape).astype("float32")
+    ref = tvm.topi.testing.softmax_python(inp) + 1.0
+
+    f = tvm.build(s, [A, B], target)
+    a = tvm.nd.array(inp, dev)
+    b = tvm.nd.array(np.zeros(shape, dtype=B.dtype), dev)
+    f(a, b)
+    tvm.testing.assert_allclose(b.numpy(), ref, rtol=1e-5)
+
+
 if __name__ == "__main__":
-    test_rfactor_elemwise_threads()
-    test_rfactor_threads()
-    test_rfactor_factor_axis()
-    test_rfactor()
-    test_reduce_prims()
-    test_argmax()
-    test_rfactor_argmax()
-    test_warp_reduction1()
-    test_warp_reduction2()
-    test_init()
-    test_init_imm()
-    test_rfactor_init()
+    pytest.main([__pfile__])
