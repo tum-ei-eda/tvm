@@ -62,6 +62,8 @@ class StorageInfoNode : public Object {
   std::vector<DLDeviceType> device_types;
   /* \brief The sizes of each storage element. */
   std::vector<int64_t> storage_sizes_in_bytes;
+  /* \brief The offset of the expression into a storage. */
+  std::vector<int64_t> offsets;
 
   // TODO(@jroesch): expose the fields
   void VisitAttrs(AttrVisitor* v) {}
@@ -74,7 +76,7 @@ class StorageInfoNode : public Object {
 class StorageInfo : public ObjectRef {
  public:
   StorageInfo(std::vector<int64_t> storage_ids, std::vector<DLDeviceType> device_types,
-              std::vector<int64_t> storage_sizes_in_bytes);
+              std::vector<int64_t> storage_sizes_in_bytes, std::vector<int64_t> offsets);
   TVM_DEFINE_OBJECT_REF_METHODS(StorageInfo, ObjectRef, StorageInfoNode);
 };
 
