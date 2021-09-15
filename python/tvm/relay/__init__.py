@@ -29,7 +29,6 @@ from . import adt
 from . import prelude
 from . import loops
 from . import scope_builder
-from . import memplan
 
 from . import transform
 from . import analysis
