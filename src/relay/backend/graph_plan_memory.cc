@@ -229,6 +229,7 @@ class StorageAllocator : public StorageAllocaBaseVisitor {
       std::vector<int64_t> storage_ids;
       std::vector<DLDeviceType> device_types;
       std::vector<int64_t> sid_sizes_byte;
+      std::vector<int64_t> offsets;
 
       for (StorageToken* tok : kv.second) {
         if (tok->device_type) {
@@ -238,8 +239,9 @@ class StorageAllocator : public StorageAllocaBaseVisitor {
         storage_ids.push_back(tok->storage_id);
         device_types.push_back(static_cast<DLDeviceType>(tok->device_type));
         sid_sizes_byte.push_back(GetMemorySize(tok));
+        offsets.push_back(0);
       }
-      auto storage_info = backend::StorageInfo(storage_ids, device_types, sid_sizes_byte);
+      auto storage_info = backend::StorageInfo(storage_ids, device_types, sid_sizes_byte, offsets);
       smap.Set(GetRef<Expr>(kv.first), storage_info);
     }
     // Either all or none of the nodes should be annotated.
@@ -455,7 +457,15 @@ class StorageAllocator : public StorageAllocaBaseVisitor {
   std::unordered_map<const ExprNode*, std::vector<StorageToken*> > prototype_;
 };
 
-StaticMemoryPlan GraphPlanMemory(const Function& func) { return StorageAllocator().Plan(func); }
+StaticMemoryPlan GraphPlanMemory(const Function& func) {
+  auto pf = runtime::Registry::Get("tvm.relay.plan_memory");
+  if (pf) {
+    StaticMemoryPlan out = (*pf)(func);
+    return out;
+  }
+
+  return StorageAllocator().Plan(func);
+}
 
 TVM_REGISTER_GLOBAL("relay.backend.GraphPlanMemory").set_body_typed(GraphPlanMemory);
 

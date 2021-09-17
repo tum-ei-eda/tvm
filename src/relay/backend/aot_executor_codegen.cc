@@ -102,6 +102,7 @@ class AOTOnDemandAllocator : public MixedModeVisitor {
     std::vector<int64_t> storage_ids;
     std::vector<DLDeviceType> device_types;
     std::vector<int64_t> storage_sizes_in_bytes;
+    std::vector<int64_t> offsets;
     Expr expr = GetRef<Expr>(op);
     for (Expr field : op->fields) {
       auto sid = GetStorage(field);
@@ -110,8 +111,9 @@ class AOTOnDemandAllocator : public MixedModeVisitor {
       storage_sizes_in_bytes.insert(storage_sizes_in_bytes.end(),
                                     sid->storage_sizes_in_bytes.begin(),
                                     sid->storage_sizes_in_bytes.end());
+      offsets.insert(offsets.end(), sid->offsets.begin(), sid->offsets.end());
     }
-    storage_device_map_[expr] = StorageInfo(storage_ids, device_types, storage_sizes_in_bytes);
+    storage_device_map_[expr] = StorageInfo(storage_ids, device_types, storage_sizes_in_bytes, offsets);
     AssignReturnSid(expr);
   }
 
@@ -121,7 +123,7 @@ class AOTOnDemandAllocator : public MixedModeVisitor {
     ICHECK_LT(static_cast<size_t>(op->index), sids->storage_ids.size());
     storage_device_map_[expr] =
         StorageInfo({sids->storage_ids[op->index]}, {sids->device_types[op->index]},
-                    {sids->storage_sizes_in_bytes[op->index]});
+                    {sids->storage_sizes_in_bytes[op->index]}, {sids->offsets[op->index]});
     AssignReturnSid(expr);
   }
 
@@ -184,6 +186,7 @@ class AOTOnDemandAllocator : public MixedModeVisitor {
     std::vector<int64_t> storage_ids;
     std::vector<DLDeviceType> device_types;
     std::vector<int64_t> storage_sizes_in_bytes;
+    std::vector<int64_t> offsets;
     Expr expr = GetRef<Expr>(op);
     int device_type_int =
         node_device_map_.count(GetRef<Expr>(op)) ? node_device_map_[expr]->value : 0;
@@ -194,6 +197,7 @@ class AOTOnDemandAllocator : public MixedModeVisitor {
         storage_ids.push_back(next_available_sid_++);
         storage_sizes_in_bytes.push_back(GetMemorySizeBytes(ttype));
         device_types.push_back(DLDeviceType(device_type_int));
+        offsets.push_back(0);
       }
     } else {
       const auto* ttype = op->checked_type().as<TensorTypeNode>();
@@ -201,8 +205,9 @@ class AOTOnDemandAllocator : public MixedModeVisitor {
       storage_ids.push_back(next_available_sid_++);
       storage_sizes_in_bytes.push_back(GetMemorySizeBytes(ttype));
       device_types.push_back(DLDeviceType(device_type_int));
+      offsets.push_back(0);
     }
-    storage_device_map_[expr] = StorageInfo(storage_ids, device_types, storage_sizes_in_bytes);
+    storage_device_map_[expr] = StorageInfo(storage_ids, device_types, storage_sizes_in_bytes, offsets);
   }
   /*! \brief mapping of expression -> storageInfo*/
   StorageMap storage_device_map_;
@@ -676,7 +681,7 @@ class AOTExecutorCodegen : public MixedModeVisitor {
 
     Optional<Array<tvm::runtime::Module>> external_modules =
         lowered_mod->GetAttr<Array<tvm::runtime::Module>>("external_mods");
-    ICHECK(external_modules) << "Attribute \"external_modules\" should be set at this point.";
+    ICHECK(external_modules) << "Attribute \"external_mods\" should be set at this point.";
 
     // This is the point where we separate the functions in the module by target
     ret.lowered_funcs = tec::GetPerTargetModules(lowered_mod);

@@ -670,6 +670,10 @@ void CodeGenC::VisitExpr_(const CallNode* op, std::ostream& os) {  // NOLINT(*)
       os << " != ";
       this->PrintExpr(op->args[0], os);
       os << ")";
+    } else if (ptr_op->name == "tir.round") {
+      os << "(";
+      this->PrintExpr(op->args[0], os);
+      os << " + 0.5f)";
     } else if (op->op.same_as(builtin::lookup_param())) {
       ICHECK_EQ(op->args.size(), 1);
       const StringImmNode* str = op->args[0].as<StringImmNode>();

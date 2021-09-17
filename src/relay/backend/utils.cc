@@ -33,13 +33,35 @@ namespace backend {
 TVM_REGISTER_NODE_TYPE(StorageInfoNode);
 
 StorageInfo::StorageInfo(std::vector<int64_t> storage_ids, std::vector<DLDeviceType> device_types,
-                         std::vector<int64_t> storage_sizes_in_bytes) {
+                         std::vector<int64_t> storage_sizes_in_bytes,
+                         std::vector<int64_t> offsets) {
   auto n = make_object<StorageInfoNode>();
   n->storage_ids = std::move(storage_ids);
   n->device_types = std::move(device_types);
   n->storage_sizes_in_bytes = std::move(storage_sizes_in_bytes);
+  n->offsets = std::move(offsets);
   data_ = std::move(n);
 }
+
+TVM_REGISTER_GLOBAL("relay.ir.StorageInfo")
+    .set_body_typed([](const Array<Integer>& sids, const Array<Integer>& dev_types,
+                       const Array<Integer>& sizes_in_bytes, const Array<Integer>& offsets) {
+      std::vector<int64_t> sids_v, sizes_v, offsets_v;
+      std::vector<DLDeviceType> dev_types_v;
+      for (auto d : dev_types) {
+        dev_types_v.push_back(static_cast<DLDeviceType>(static_cast<int64_t>(d)));
+      }
+      for (auto s : sids) {
+        sids_v.push_back(s);
+      }
+      for (auto s : sizes_in_bytes) {
+        sizes_v.push_back(s);
+      }
+      for (auto o : offsets) {
+        offsets_v.push_back(o);
+      }
+      return StorageInfo(sids_v, dev_types_v, sizes_v, offsets_v);
+    });
 
 TVM_REGISTER_GLOBAL("relay.ir.StorageInfoStorageIds").set_body_typed([](StorageInfo si) {
   Array<tvm::Integer> ids;
@@ -96,6 +118,11 @@ int64_t CalculateRelayExprSizeBytes(const Type& expr_type) {
   auto element_size = tensor_type->dtype.bytes();
   return element_size * num_of_elements;
 }
+
+TVM_REGISTER_GLOBAL("relay.ir.StaticMemoryPlan")
+    .set_body_typed([](const Map<Expr, StorageInfo>& expr_to_storage_info) {
+      return StaticMemoryPlan(expr_to_storage_info);
+    });
 
 TVM_REGISTER_NODE_TYPE(FunctionInfoNode);
 

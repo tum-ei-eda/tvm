@@ -4711,10 +4711,6 @@ onnx_test_folders = sorted(
 )
 
 unsupported_onnx_tests = [
-    "test_adagrad",
-    "test_adagrad_multiple",
-    "test_adam",
-    "test_adam_multiple",
     "test_cast_BFLOAT16_to_FLOAT",
     "test_cast_DOUBLE_to_FLOAT16",
     "test_cast_FLOAT_to_BFLOAT16",
@@ -4787,9 +4783,11 @@ unsupported_onnx_tests = [
     "test_nllloss_NCd1d2d3_sum_weight_high_ii_expanded",
     "test_nllloss_NCd1d2d3d4d5_mean_weight_expanded",
     "test_nllloss_NCd1d2d3d4d5_none_no_weight_expanded",
-    # This nllloss test is flaky and sometimes gives NaNs
+    # These nllloss tests are flaky and sometimes gives NaNs
     # Investigate it here: https://github.com/apache/tvm/issues/8918
     "test_nllloss_NCd1d2d3_none_no_weight_negative_ii",
+    # Investigate it here: https://github.com/apache/tvm/issues/8964
+    "test_nllloss_NCd1d2d3_sum_weight_high_ii",
     "test_qlinearmatmul_2D",
     "test_qlinearmatmul_3D",
     "test_range_float_type_positive_delta_expanded",

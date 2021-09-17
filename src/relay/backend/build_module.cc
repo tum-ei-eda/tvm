@@ -46,6 +46,8 @@ namespace backend {
 using TargetsMap = Map<tvm::Integer, tvm::Target>;
 using namespace tvm::relay::transform;
 
+TVM_REGISTER_PASS_CONFIG_OPTION("relay.fusedtiling", Bool);
+
 /*!
  * \brief Output of building module
  */
@@ -478,8 +480,23 @@ class RelayBuildModule : public runtime::ModuleNode {
     // Relay IRModule -> IRModule optimizations.
     relay_module = Optimize(relay_module, targets_, params);
 
+    transform::PassContext pc = PassContext::Current();
+    auto doFusedTiling = pc->GetConfig("relay.fusedtiling", Bool(false));
+    const runtime::PackedFunc* pfPostPass = runtime::Registry::Get("relay.backend.PostPass");
+    if (doFusedTiling.value() && pfPostPass) {
+      Map<String, Constant> argParams;
+      for (const auto& param : params) {
+        argParams.Set(param.first, Constant(param.second));
+      }
+      relay_module = (*pfPostPass)(relay_module, argParams);
+    }
+
     // Get the updated function.
     auto func = Downcast<Function>(relay_module->Lookup("main"));
+
+    printf("Updated func:\n");
+    //std::cout << func << std::endl;
+    std::cout << PrettyPrint(func) << std::endl;
 
     // Generate code for the updated function.
     executor_codegen_ = MakeExecutorCodegen(executor_);

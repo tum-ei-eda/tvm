@@ -241,26 +241,23 @@ class GraphExecutorCodegen : public backend::MemoizedExprTranslator<std::vector<
     ICHECK(main_func_info) << "The attribute \"main_func_info\" should be set at this point.";
     function_metadata_.Set(runtime::symbol::tvm_module_main, main_func_info.value());
 
-    // Get only the Relay functions out of the lowered module so we can run type inference on them
-    IRModule main_module = tec::GetMainModule(lowered_mod);
-    main_module = relay::transform::InferType()(main_module);
-    relay::Function main_func = Downcast<relay::Function>(main_module->Lookup("main"));
+    Function lowered_main_func = Downcast<Function>(lowered_mod->Lookup("main"));
 
     // Now that we have lowered all operators to TIR code, we can proceed with compilation.
     //
     // We need to unfortunately re-plan as the previous results have been invalidated by lowering
     // we will fix this in future refactors.
-    memory_plan_ = GraphPlanMemory(main_func);
+    memory_plan_ = GraphPlanMemory(lowered_main_func);
 
     // The graph planner also can not handle planning calls to global variables to we must remap
 
     // First we convert all the parameters into input nodes.
-    for (auto param : main_func->params) {
+    for (auto param : lowered_main_func->params) {
       auto node_ptr = GraphInputNode::make_node_ptr(param->name_hint(), GraphAttrs());
       var_map_[param.get()] = AddNode(node_ptr, param);
     }
 
-    heads_ = VisitExpr(main_func->body);
+    heads_ = VisitExpr(lowered_main_func->body);
     std::ostringstream os;
 
     dmlc::JSONWriter writer(&os);
@@ -277,7 +274,7 @@ class GraphExecutorCodegen : public backend::MemoizedExprTranslator<std::vector<
 
     Optional<Array<tvm::runtime::Module>> external_modules =
         lowered_mod->GetAttr<Array<tvm::runtime::Module>>("external_mods");
-    ICHECK(external_modules) << "Attribute \"external_modules\" should be set at this point.";
+    ICHECK(external_modules) << "Attribute \"external_mods\" should be set at this point.";
 
     // This is the point where we separate the functions in the module by target
     ret.lowered_funcs = tec::GetPerTargetModules(lowered_mod);
@@ -352,6 +349,7 @@ class GraphExecutorCodegen : public backend::MemoizedExprTranslator<std::vector<
       auto op_nd = std::dynamic_pointer_cast<GraphOpNode>(node);
       op_nd->attrs_["shape"] = shape;
       op_nd->attrs_["dtype"] = dtype;
+      op_nd->attrs_["offset"] = storage_info->offsets;
       op_nd->num_outputs_ = tuple_type->fields.size();
       return ret;
     }
@@ -363,6 +361,7 @@ class GraphExecutorCodegen : public backend::MemoizedExprTranslator<std::vector<
       dtype.emplace_back(DType2String(tensor_type->dtype));
       node->attrs_["shape"] = shape;
       node->attrs_["dtype"] = dtype;
+      node->attrs_["offset"] = storage_info->offsets;
     } else {
       LOG(FATAL) << "type " << checked_type->GetTypeKey() << " not supported";
     }
@@ -526,11 +525,13 @@ class GraphExecutorCodegen : public backend::MemoizedExprTranslator<std::vector<
     std::vector<size_t> storage_ids;
     std::vector<size_t> device_types;
     std::vector<std::string> dltypes;
+    std::vector<size_t> offsets;
     std::vector<size_t> node_row_ptr{0};
     for (auto node : nodes_) {
       const auto& shape_vec = dmlc::get<ShapeVector>(node->attrs_["shape"]);
       const auto& storage_id = dmlc::get<std::vector<int64_t>>(node->attrs_["storage_id"]);
       const auto& dtype_vec = dmlc::get<std::vector<std::string>>(node->attrs_["dtype"]);
+      const auto& offset_vec = dmlc::get<std::vector<int64_t>>(node->attrs_["offset"]);
 
       ICHECK_EQ(node->num_outputs_, shape_vec.size());
       num_entry += node->num_outputs_;
@@ -538,6 +539,7 @@ class GraphExecutorCodegen : public backend::MemoizedExprTranslator<std::vector<
       shapes.insert(shapes.end(), shape_vec.begin(), shape_vec.end());
       dltypes.insert(dltypes.end(), dtype_vec.begin(), dtype_vec.end());
       storage_ids.insert(storage_ids.end(), storage_id.begin(), storage_id.end());
+      offsets.insert(offsets.end(), offset_vec.begin(), offset_vec.end());
       if (node->attrs_.count("device_index")) {
         const auto& dev_types = dmlc::get<std::vector<int64_t>>(node->attrs_["device_index"]);
         device_types.insert(device_types.end(), dev_types.begin(), dev_types.end());
@@ -559,6 +561,8 @@ class GraphExecutorCodegen : public backend::MemoizedExprTranslator<std::vector<
     }
     attrs["dltype"].emplace_back(std::string("list_str"));
     attrs["dltype"].emplace_back(dltypes);
+    attrs["offset"].emplace_back(std::string("list_int"));
+    attrs["offset"].emplace_back(offsets);
     writer->WriteObjectKeyValue("attrs", attrs);
     writer->WriteObjectKeyValue("node_row_ptr", node_row_ptr);
     writer->EndObject();
