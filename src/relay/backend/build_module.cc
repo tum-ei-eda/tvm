@@ -46,8 +46,6 @@ namespace backend {
 using TargetsMap = Map<tvm::Integer, tvm::Target>;
 using namespace tvm::relay::transform;
 
-TVM_REGISTER_PASS_CONFIG_OPTION("relay.fusedtiling", Bool);
-
 /*!
  * \brief Output of building module
  */
@@ -480,10 +478,8 @@ class RelayBuildModule : public runtime::ModuleNode {
     // Relay IRModule -> IRModule optimizations.
     relay_module = Optimize(relay_module, targets_, params);
 
-    transform::PassContext pc = PassContext::Current();
-    auto doFusedTiling = pc->GetConfig("relay.fusedtiling", Bool(false));
     const runtime::PackedFunc* pfPostPass = runtime::Registry::Get("relay.backend.PostPass");
-    if (doFusedTiling.value() && pfPostPass) {
+    if (pfPostPass) {
       Map<String, Constant> argParams;
       for (const auto& param : params) {
         argParams.Set(param.first, Constant(param.second));
