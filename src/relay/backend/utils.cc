@@ -146,11 +146,6 @@ int64_t CalculateRelayExprSizeBytes(const Type& expr_type) {
   return element_size * num_of_elements;
 }
 
-TVM_REGISTER_GLOBAL("relay.ir.StaticMemoryPlan")
-    .set_body_typed([](const Map<Expr, StorageInfo>& expr_to_storage_info) {
-      return StaticMemoryPlan(expr_to_storage_info);
-    });
-
 TVM_REGISTER_NODE_TYPE(FunctionInfoNode);
 
 FunctionInfo::FunctionInfo(Map<Target, Integer> workspace_sizes, Map<Target, Integer> io_sizes,
