@@ -31,7 +31,7 @@
 #endif
 #include "bundle.h"
 
-#define CRT_MEMORY_NUM_PAGES 16384
+#define CRT_MEMORY_NUM_PAGES 524288
 #define CRT_MEMORY_PAGE_SIZE_LOG2 10
 
 static uint8_t g_crt_memory[CRT_MEMORY_NUM_PAGES * (1 << CRT_MEMORY_PAGE_SIZE_LOG2)];
