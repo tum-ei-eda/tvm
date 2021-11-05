@@ -34,6 +34,7 @@
  */
 #include <tvm/ir/module.h>
 #include <tvm/ir/type_functor.h>
+#include <tvm/relay/attrs/annotation.h>
 #include <tvm/relay/expr_functor.h>
 #include <tvm/relay/pattern_functor.h>
 #include <tvm/tir/function.h>
@@ -119,6 +120,9 @@ Doc RelayTextPrinter::Print(const ObjectRef& node, bool meta, bool try_inline) {
     return PrintPattern(Downcast<Pattern>(node), meta);
   } else if (node.as<IRModuleNode>()) {
     return PrintMod(Downcast<IRModule>(node));
+  } else if (!show_meta_data_ && node.as<BaseAttrsNode>()) {
+    // Show attributes in readable form.
+    return PrintAttrs(Downcast<Attrs>(node));
   } else {
     // default module.
     std::ostringstream os;
@@ -781,7 +785,7 @@ Doc RelayTextPrinter::PrintAttr(const ObjectRef& value, bool meta) {
 }
 
 Doc RelayTextPrinter::VisitAttrDefault_(const Object* op) {
-  return PrintAttr(GetRef<ObjectRef>(op), true);
+  return PrintAttr(GetRef<ObjectRef>(op), /*meta=*/true);
 }
 
 Doc RelayTextPrinter::VisitAttr_(const ArrayNode* op) {
@@ -848,17 +852,28 @@ class RelayTextPrinter::AttrPrinter : public AttrVisitor {
   RelayTextPrinter* parent_;
 };
 
+Doc RelayTextPrinter::PrintAttrs(const Attrs& attrs) {
+  std::vector<Doc> docs;
+  AttrPrinter printer(&docs, this);
+  const_cast<BaseAttrsNode*>(attrs.operator->())->VisitNonDefaultAttrs(&printer);
+  Doc doc;
+  doc << "{" << Doc::Concat(docs) << "}";
+
+  return doc;
+}
+
 std::vector<Doc> RelayTextPrinter::PrintCallAttrs(const Attrs& attrs, const Expr& op) {
   std::vector<Doc> docs;
   if (!attrs.defined()) return docs;
   const auto* op_node = op.as<OpNode>();
-  if (op_node && (attrs->type_index() != op_node->attrs_type_index)) {
+  if (show_meta_data_ && op_node && (attrs->type_index() != op_node->attrs_type_index)) {
     // fallback
     Doc doc;
     doc << meta_->GetMetaNode(attrs);
     docs.push_back(doc);
     return docs;
   } else {
+    // Show attributes in readable form.
     AttrPrinter printer(&docs, this);
     const_cast<BaseAttrsNode*>(attrs.operator->())->VisitNonDefaultAttrs(&printer);
     if (!op_node) {

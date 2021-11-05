@@ -17,3 +17,5 @@
 """Tensor Expressions for the NPU"""
 
 from .convolution import *
+from .depthwise import *
+from .pooling import *

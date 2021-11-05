@@ -123,6 +123,8 @@ TVM_REGISTER_GLOBAL("tir.schedule.ScheduleRemoveRV")
 /******** (FFI) Sampling ********/
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleSampleCategorical")
     .set_body_method<Schedule>(&ScheduleNode::SampleCategorical);
+TVM_REGISTER_GLOBAL("tir.schedule.ScheduleSamplePerfectTile")
+    .set_body_method<Schedule>(&ScheduleNode::SamplePerfectTile);
 /******** (FFI) Get blocks & loops ********/
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleGetBlock")
     .set_body_method<Schedule>(&ScheduleNode::GetBlock);
@@ -155,6 +157,8 @@ TVM_REGISTER_GLOBAL("tir.schedule.ScheduleComputeInline")
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleReverseComputeInline")
     .set_body_method<Schedule>(&ScheduleNode::ReverseComputeInline);
 /******** (FFI) Reduction ********/
+TVM_REGISTER_GLOBAL("tir.schedule.ScheduleDecomposeReduction")
+    .set_body_method<Schedule>(&ScheduleNode::DecomposeReduction);
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleRFactor")
     .set_body_method<Schedule>(&ScheduleNode::RFactor);
 /******** (FFI) Block annotation ********/

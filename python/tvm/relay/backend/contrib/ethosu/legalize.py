@@ -16,7 +16,8 @@
 # under the License.
 # pylint: disable=invalid-name, unused-argument, import-outside-toplevel, no-value-for-parameter
 """A set of passes to legalize some of operations for the NPU"""
-from typing import List
+from typing import List, Type
+
 import numpy as np  # type: ignore
 
 import tvm  # type: ignore
@@ -26,6 +27,7 @@ from tvm.relay.dataflow_pattern import DFPatternCallback  # type: ignore
 from tvm.relay.dataflow_pattern import wildcard
 from tvm.relay.dataflow_pattern import is_op
 from tvm.relay.dataflow_pattern import rewrite
+from tvm.relay.dataflow_pattern import CallPattern
 from tvm.relay.backend.contrib.ethosu import op as ethosu_ops  # type: ignore
 from tvm.relay.backend.contrib.ethosu.errors import UnsupportedLayout  # type: ignore
 from tvm.relay.backend.contrib.ethosu import vela_api
@@ -121,7 +123,7 @@ class LegalizeSplit:
         pass
 
 
-class EthosUConv2DRewriter(DFPatternCallback):
+class Conv2DRewriter(DFPatternCallback):
     """Convert conv2d related composite functions into ethosu_conv2d operators"""
 
     def __init__(self):
@@ -193,14 +195,217 @@ class EthosUConv2DRewriter(DFPatternCallback):
 
 
 @ir.transform.module_pass(opt_level=1)
-class LegalizeEthosUConv2D:
-    """This is the pass that wraps the EthosUConv2DRewriter"""
+class LegalizeConv2D:
+    """This is the pass that wraps the Conv2DRewriter"""
 
     def transform_module(
         self, mod: tvm.ir.IRModule, ctx: tvm.ir.transform.PassContext
     ) -> tvm.ir.IRModule:
         for global_var, func in mod.functions.items():
-            func = rewrite(EthosUConv2DRewriter(), func)
+            func = rewrite(Conv2DRewriter(), func)
+            mod.update_func(global_var, func)
+        return mod
+
+    def __call__(self, *args, **kwargs):
+        pass
+
+
+class DepthwiseConv2DRewriter(DFPatternCallback):
+    """Convert ethosu.qnn_depthwise_conv2d composite functions to ethosu_depthwise_conv2d
+    operators"""
+
+    def __init__(self):
+        super().__init__(require_type=True)
+        self.pattern = (
+            wildcard().has_attr(
+                {"Composite": ethosu_patterns.QnnDepthwiseConv2DParams.composite_name}
+            )
+        )(wildcard())
+
+    def callback(
+        self, pre: tvm.relay.Expr, post: tvm.relay.Expr, node_map: tvm.ir.container.Map
+    ) -> tvm.relay.Expr:
+        params = ethosu_patterns.QnnDepthwiseConv2DParams(post.op.body)
+        params.ifm.tensor = post.args[0]
+        channels_map = {
+            "NHWC": 3,
+        }
+        if str(params.ofm.layout) not in channels_map.keys():
+            raise UnsupportedLayout(str(params.ofm.layout))
+        kernel_shape_map = {
+            "HWOI": params.weights.shape[0:2],
+        }
+        if str(params.weights.layout) not in kernel_shape_map.keys():
+            raise UnsupportedLayout(str(params.weights.layout))
+
+        weights_values = params.weights.values
+        weights_values_ohwi = np.moveaxis(weights_values, [0, 1, 2, 3], [1, 2, 0, 3])
+
+        activation = "NONE"
+        # Activations requiring LUT is currently not supported, so setting it to an empty list
+        lut = relay.const([], "int8")
+        clip_min = 0
+        clip_max = 0
+        if params.activation:
+            activation = ethosu_patterns.QnnDepthwiseConv2DParams.activation_map[
+                params.activation.op.name
+            ]
+            if activation == "CLIP":
+                clip_min = int(params.activation.attrs.a_min)
+                clip_max = int(params.activation.attrs.a_max)
+        scale_bias = vela_api.pack_biases(
+            biases=params.biases.tensor.data.asnumpy(),
+            ifm_scale=params.ifm.q_params.scale_f32,
+            ifm_dtype=np.dtype(params.ifm.dtype),
+            weight_scales=params.weights.q_params.scale_f32,
+            ofm_scale=params.ofm.q_params.scale_f32,
+            is_activation_tanh_or_sigmoid=activation in ["TANH", "SIGMOID"],
+        )
+
+        ethosu_depthwise_conv2d = ethosu_ops.ethosu_depthwise_conv2d(
+            post.args[0],  # IFM
+            relay.const(weights_values_ohwi, params.weights.values.dtype),
+            relay.const(scale_bias, "uint8"),
+            lut,
+            float(params.ifm.q_params.scale_f32),
+            int(params.ifm.q_params.zero_point),
+            int(params.weights.q_params.zero_point),
+            float(params.ofm.q_params.scale_f32),
+            int(params.ofm.q_params.zero_point),
+            kernel_shape_map[str(params.weights.layout)],
+            params.ofm.shape[channels_map[str(params.ofm.layout)]],
+            strides=params.strides,
+            padding=params.padding,
+            dilation=params.dilation,
+            activation=activation,
+            clip_min=clip_min,
+            clip_max=clip_max,
+            upscale="NONE",
+            ifm_layout=str(params.ifm.layout),
+            ofm_layout=str(params.ofm.layout),
+        )
+        return ethosu_depthwise_conv2d
+
+
+@ir.transform.module_pass(opt_level=1)
+class LegalizeDepthwiseConv2D:
+    """This is the pass that wraps the DepthwiseConv2DRewriter"""
+
+    def transform_module(
+        self, mod: tvm.ir.IRModule, ctx: tvm.ir.transform.PassContext
+    ) -> tvm.ir.IRModule:
+        for global_var, func in mod.functions.items():
+            func = rewrite(DepthwiseConv2DRewriter(), func)
+            mod.update_func(global_var, func)
+        return mod
+
+    def __call__(self, *args, **kwargs):
+        pass
+
+
+class PoolingRewriter(DFPatternCallback):
+    """Convert ethosu.avgpool2d and ethosu.maxpool2d composite functions to
+    ethosu_pooling operators"""
+
+    def __init__(
+        self,
+        params_class: Type,
+        pattern: CallPattern,
+    ):
+        super().__init__(require_type=True)
+        self.params_class = params_class
+        self.pattern = pattern
+
+    def callback(
+        self, pre: tvm.relay.Expr, post: tvm.relay.Expr, node_map: tvm.ir.container.Map
+    ) -> tvm.relay.Expr:
+        params = self.params_class(post.op.body)
+        params.ifm.tensor = post.args[0]
+        channels_map = {
+            "NHWC": 3,
+        }
+        if str(params.ofm.layout) not in channels_map.keys():
+            raise UnsupportedLayout(str(params.ofm.layout))
+
+        activation_map = {"clip": "CLIP"}
+        if params.activation:
+            activation = activation_map[params.activation.op.name]
+            clip_min = int(params.activation.attrs.a_min)
+            clip_max = int(params.activation.attrs.a_max)
+        else:
+            activation = "NONE"
+            clip_min = 0
+            clip_max = 0
+
+        # Activations requiring LUT is currently not supported, so setting it to an empty list
+        lut = relay.const([], dtype="int8")
+
+        return ethosu_ops.ethosu_pooling(
+            ifm=post.args[0],
+            lut=lut,
+            pooling_type=params.pooling_type,
+            ifm_scale=params.ifm.q_params.scale_f32,
+            ifm_zero_point=params.ifm.q_params.zero_point,
+            ofm_scale=params.ofm.q_params.scale_f32,
+            ofm_zero_point=params.ofm.q_params.zero_point,
+            pool_shape=params.pool_shape,
+            ofm_channels=params.ofm.shape[channels_map[str(params.ofm.layout)]],
+            strides=params.strides,
+            padding=params.padding,
+            activation=activation,
+            clip_min=clip_min,
+            clip_max=clip_max,
+            upscale="NONE",
+            ifm_layout=str(params.ifm.layout),
+            ofm_layout=str(params.ofm.layout),
+        )
+
+
+class MaxPoolingRewriter(PoolingRewriter):
+    def __init__(self):
+        super().__init__(
+            params_class=ethosu_patterns.MaxPool2DParams,
+            pattern=(
+                wildcard().has_attr({"Composite": ethosu_patterns.MaxPool2DParams.composite_name})
+            )(wildcard()),
+        )
+
+
+@ir.transform.module_pass(opt_level=1)
+class LegalizeMaxPooling:
+    """This is the pass that wraps the MaxPoolingRewriter"""
+
+    def transform_module(
+        self, mod: tvm.ir.IRModule, ctx: tvm.ir.transform.PassContext
+    ) -> tvm.ir.IRModule:
+        for global_var, func in mod.functions.items():
+            func = rewrite(MaxPoolingRewriter(), func)
+            mod.update_func(global_var, func)
+        return mod
+
+    def __call__(self, *args, **kwargs):
+        pass
+
+
+class AvgPoolingRewriter(PoolingRewriter):
+    def __init__(self):
+        super().__init__(
+            params_class=ethosu_patterns.AvgPool2DParams,
+            pattern=(
+                wildcard().has_attr({"Composite": ethosu_patterns.AvgPool2DParams.composite_name})
+            )(wildcard()),
+        )
+
+
+@ir.transform.module_pass(opt_level=1)
+class LegalizeAvgPooling:
+    """This is the pass that wraps the AvgPoolingRewriter"""
+
+    def transform_module(
+        self, mod: tvm.ir.IRModule, ctx: tvm.ir.transform.PassContext
+    ) -> tvm.ir.IRModule:
+        for global_var, func in mod.functions.items():
+            func = rewrite(AvgPoolingRewriter(), func)
             mod.update_func(global_var, func)
         return mod
 
@@ -219,5 +424,14 @@ class LegalizeEthosU:
         self, mod: tvm.ir.IRModule, ctx: tvm.ir.transform.PassContext
     ) -> tvm.ir.IRModule:
         mod = LegalizeSplit()(mod)
-        mod = LegalizeEthosUConv2D()(mod)
+        mod = LegalizeConv2D()(mod)
+        mod = LegalizeDepthwiseConv2D()(mod)
+        mod = LegalizeMaxPooling()(mod)
+        mod = LegalizeAvgPooling()(mod)
         return mod
+
+    def __call__(self, *args, **kwargs):
+        # pylint is unable figure out the decorated
+        # class is callable, thus adding this to
+        # suppress the warning.
+        pass

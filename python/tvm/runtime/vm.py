@@ -71,6 +71,7 @@ class Executable(object):
         self._save = self.mod["save"]
         self._get_lib = self.mod["get_lib"]
         self._get_bytecode = self.mod["get_bytecode"]
+        self._get_constants = self.mod["get_constants"]
         self._get_stats = self.mod["get_stats"]
         self._get_function_arity = self.mod["get_function_arity"]
         self._get_function_param_name = self.mod["get_function_param_name"]
@@ -243,6 +244,12 @@ class Executable(object):
         doesn't need to deal with it as well.
         """
         return self._get_bytecode()
+
+    @property
+    def constants(self):
+        """Returns a human-readable description of all the constants in the executable.
+        Useful for debugging and diffing generated executables in unit tests."""
+        return self._get_constants()
 
     @property
     def globals(self):
@@ -598,7 +605,7 @@ class VirtualMachine(object):
                 repeat=repeat,
                 number=number,
                 min_repeat_ms=min_repeat_ms,
-            )(func_name, device.device_type, device.device_id, *packed_args)
+            )(func_name, device.device_type % RPC_SESS_MASK, device.device_id, *packed_args)
         if args or kwargs:
             self.set_input(func_name, *args, **kwargs)
         return self.module.time_evaluator(

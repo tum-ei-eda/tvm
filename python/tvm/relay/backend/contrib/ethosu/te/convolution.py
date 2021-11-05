@@ -53,7 +53,7 @@ def conv2d_compute(
     scale_bias : te.Tensor
         The packed per-channel weight scale and bias tensor.
     lut : te.Tensor
-        The look-up table values to use if activation = "LUT".
+        The look-up table of values to use if activation = "LUT".
     ifm_scale : float
         The quantization scale for the Input Feature Map tensor.
     ifm_zero_point : int
@@ -140,7 +140,7 @@ def conv2d_compute(
             ).astype(ifm.dtype)
             * weight[cc, rh, rw, rc].astype(ifm.dtype)
             # This is a trick to load 10 elements of the scale_bias at once, not accurate maths
-            + (scale_bias[cc, 0] * scale_bias[cc, 9]),
+            + (scale_bias[cc, 0] * scale_bias[cc, 9]).astype(ifm.dtype),
             axis=[rh, rw, rc],
         ),
         name="ethosu_conv2d",

@@ -22,13 +22,22 @@
 #include <tvm/support/random_engine.h>
 #include <tvm/tir/schedule/state.h>
 
+#include <vector>
+
 namespace tvm {
 namespace tir {
 
 /******** Schedule: Sampling ********/
 /*!
+ * \brief Sample a random integer from a given range.
+ * \param min_inclusive The minimum value of the range, inclusive.
+ * \param max_exclusive The maximum value of the range, exclusive.
+ * \return The random integer sampled in the given range.
+ */
+TVM_DLL int32_t SampleInt(support::LinearCongruentialEngine::TRandState* rand_state,
+                          int32_t min_inclusive, int32_t max_exclusive);
+/*!
  * \brief Sample once category from candidates according to the probability weights.
- * \param self The schedule to update
  * \param rand_state The pointer to schedule's random state
  * \param candidates The candidates
  * \param probs The probability distribution of the candidates
@@ -38,6 +47,40 @@ namespace tir {
 TVM_DLL int64_t SampleCategorical(support::LinearCongruentialEngine::TRandState* rand_state,
                                   const Array<Integer>& candidates, const Array<FloatImm>& probs,
                                   Optional<Integer>* decision);
+/*!
+ * \brief Sample the factors to perfect tile a specific loop
+ * \param rand_state The random state
+ * \param extent The loop extent to be tiled
+ * \param n_split The number of tiles to be sampled
+ * \return A list of length `n`, the random perfect tile sizes sampled
+ */
+TVM_DLL std::vector<int64_t> SamplePerfectTile(
+    support::LinearCongruentialEngine::TRandState* rand_state,  //
+    int32_t extent, int32_t n_splits);
+/*!
+ * \brief Sample the factors to perfect tile a specific loop
+ * \param rand_state The random state
+ * \param extent The loop extent to be tiled
+ * \param n_split The number of tiles to be sampled
+ * \param max_innermost_factor The maximum tile size allowed to be sampled in the innermost loop
+ * \return A list of length `n`, the random perfect tile sizes sampled
+ */
+TVM_DLL std::vector<int64_t> SamplePerfectTile(
+    support::LinearCongruentialEngine::TRandState* rand_state,  //
+    int32_t extent, int32_t n_split, int32_t max_innermost_factor);
+/*!
+ * \brief Sample the factors to perfect tile a specific loop
+ * \param rand_state The random state
+ * \param loop_sref The loop to be tiled
+ * \param n_split The number of tiles to be sampled
+ * \param max_innermost_factor The maximum tile size allowed to be sampled in the innermost loop
+ * \param decision The sampling decision
+ * \return A list of length `n`, the random perfect tile sizes sampled
+ */
+TVM_DLL std::vector<int64_t> SamplePerfectTile(
+    support::LinearCongruentialEngine::TRandState* rand_state,  //
+    const tir::StmtSRef& loop_sref, int32_t n_split, int32_t max_innermost_factor,
+    Optional<Array<Integer>>* decision);
 
 /******** Schedule: Get blocks & loops ********/
 /*!
@@ -72,6 +115,7 @@ TVM_DLL Array<StmtSRef> Split(ScheduleState self, const StmtSRef& loop_sref,
  * 1) The loops can't have annotations or thread bindings.
  * 2) The inner loop must be the only child of the outer loop.
  * 3) All loops must start with 0.
+ * 4) The domain of a loop to be fused cannot depend on another loop to be fused.
  * \param self The state of the schedule
  * \param loop_srefs An array of srefs to the loops to be fused
  * \return The sref to the fused loop
@@ -224,6 +268,23 @@ TVM_DLL void ComputeInline(ScheduleState self, const StmtSRef& block_sref);
  */
 TVM_DLL void ReverseComputeInline(ScheduleState self, const StmtSRef& block_sref);
 /******** Schedule: Reduction ********/
+/*!
+ * \brief Decompose a reduction block into two separate blocks.
+ * a) The init block, which is translated from the init statement of the reduction block;
+ * b) The update block, which is the original block without init statement.
+ *
+ * The init block is inserted right before the given loop.
+ *
+ * The schedule primitive requires:
+ * 1) The input block is a reduction block.
+ * 2) The input loop is the ancestor of the block.
+ * 3) The input loop is not lower than all the loops related to reduce block var.
+ * \param block_rv The reduction block to be decomposed
+ * \param loop_rv The loop above which the init block is inserted before.
+ * \return The init block
+ */
+TVM_DLL StmtSRef DecomposeReduction(ScheduleState self, const StmtSRef& block_sref,
+                                    const StmtSRef& loop_sref);
 /*!
  * \brief Factor a reduction block by the specified loop
  * \details See python/tvm/tir/schedule/schedule.py

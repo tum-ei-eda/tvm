@@ -1070,7 +1070,7 @@ def fixed_point_multiply(data, multiplier, shift):
         The input tensor.
     multiplier : int
         The integer multiplier of the fixed point constant.
-    a_max : float
+    shift : int
         The integer shift of the fixed point constant.
 
     Returns
@@ -1102,6 +1102,29 @@ def concatenate(data, axis):
     if not isinstance(axis, int):
         raise ValueError("For now, we only support integer axis")
     return _make.concatenate(Tuple(data), axis)
+
+
+def einsum(data, equation):
+    """Evaluates the Einstein summation convention on data
+
+    Parameters
+    ----------
+    data : Union(List[relay.Expr], Tuple[relay.Expr])
+        A list of tensors.
+    equation : str
+        The einsum expression string.
+
+    Returns
+    -------
+    result : relay.Expr
+        The output tensor from the einsum op.
+    """
+    data = list(data)
+    if not data:
+        raise ValueError("relay.einsum requires data to be non-empty.")
+    if not isinstance(equation, str):
+        raise ValueError("einsum `equation` must be a str")
+    return _make.einsum(Tuple(data), equation)
 
 
 def stack(data, axis):
