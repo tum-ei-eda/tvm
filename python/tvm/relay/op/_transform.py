@@ -182,6 +182,15 @@ _reg.register_strategy("unique", strategy.unique_strategy)
 _reg.register_strategy("invert_permutation", strategy.invert_permutation_strategy)
 _reg.register_shape_func("invert_permutation", False, elemwise_shape_func)
 
+# fusedops
+@_reg.register_compute("fusedops")
+def compute_fusedops(attrs, inputs, output_type):
+    """Compute definition of fusedops"""
+    return [topi.Fuseseq(inputs[0], inputs[1], inputs[2], attrs.axis, attrs.dtype, attrs.pool_size, attrs.pool_strides, attrs.pool_padding, attrs.pool_layout, attrs.bias_axis, attrs.padding, attrs.groups, attrs.channels, attrs.kernel_size, attrs.data_layout, attrs.kernel_layout)]
+
+
+_reg.register_strategy("fusedops", strategy.Fuseop_strategy)
+_reg.register_shape_func("fusedops", False, elemwise_shape_func)#TODO:das hier evtl. abändern
 
 #####################
 #  Shape functions  #

@@ -63,6 +63,7 @@ from . import sparse
 from . import hls
 from . import random
 from . import hexagon
+from .fusedop import *
 
 # error reporting
 from .utils import InvalidShapeError

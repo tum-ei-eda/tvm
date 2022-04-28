@@ -1766,3 +1766,6 @@ def invert_permutation(data):
         relay.invert_permutation(data) = [2, 4, 3, 0, 1]
     """
     return _make.invert_permutation(data)
+#TODO:write example and easier interface
+def fuseseq(data, filter, bias, axis = None, out_dtype = None, pool_size=None, pool_strides=None, pool_padding=None, pool_layout=None, bias_axis=None ,padding = None, groups = None, channels = None, kernel_size = None, data_layout = "NHWC", kernel_layout = "HWIO"):
+    return _make.fuseseq(data, filter, bias, axis, out_dtype, pool_size, pool_strides, pool_padding, pool_layout, bias_axis, padding, groups, channels, kernel_size, data_layout, kernel_layout)

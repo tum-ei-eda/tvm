@@ -510,6 +510,94 @@ struct EinsumAttrs : public tvm::AttrsNode<EinsumAttrs> {
   }
 };  // struct EinsumAttrs
 
+/*! \brief Attributes used in Fusedoperator optimization */
+struct FusedopAttrs : public tvm::AttrsNode<FusedopAttrs> {//TODO: Beschreibung anpassen
+  Integer axis;
+  DataType dtype;
+  Array<IndexExpr> pool_size;
+  Array<IndexExpr> pool_strides;
+  Array<IndexExpr> pool_padding;
+  std::string pool_layout;
+  IndexExpr bias_axis;
+  Array<IndexExpr> padding;
+  IndexExpr groups;
+  IndexExpr channels;
+  Array<IndexExpr> kernel_size;
+  std::string data_layout;
+  std::string kernel_layout;
+
+  TVM_DECLARE_ATTRS(FusedopAttrs, "relay.attrs.FusedopAttrs") {
+    TVM_ATTR_FIELD(axis).describe("The axis to operate over").set_default(NullValue<Integer>());
+    TVM_ATTR_FIELD(dtype).describe("Output data type").set_default(NullValue<DataType>());
+    TVM_ATTR_FIELD(pool_size)
+        .set_default(Array<IndexExpr>({2, 2}))
+        .describe(
+            "The strides of convolution"
+            "Strides support both symmetric and asymmetric as"
+            "one int : same stride used on all sides"
+            "two int : different stride for up/down and left/right");
+    TVM_ATTR_FIELD(pool_strides)
+        .set_default(Array<IndexExpr>({2, 2}))
+        .describe(
+            "The strides of convolution"
+            "Strides support both symmetric and asymmetric as"
+            "one int : same stride used on all sides"
+            "two int : different stride for up/down and left/right");
+    TVM_ATTR_FIELD(pool_padding)
+        .set_default(Array<IndexExpr>({0, 0}))
+        .describe(
+            "If padding is non-zero, then the input is implicitly zero-padded"
+            "Padding support both symmetric and asymmetric as"
+            "one int : same padding used on all sides"
+            "two int : bottom, right will use same padding as top, left"
+            "four int : padding width in the order of (top, left, bottom, right)");
+    TVM_ATTR_FIELD(pool_layout)
+        .set_default("HWIO")
+        .describe(
+            "Dimension ordering of weight. Can be 'OIHW', 'OIHW16o16i', etc."
+            "'O', 'I', 'H', 'W' stands for num_filter, input_channel, height, and width"
+            "dimensions respectively.");
+    TVM_ATTR_FIELD(bias_axis)
+        .describe(
+            "The axis the bias is added to")
+        .set_default(NullValue<IndexExpr>());
+    TVM_ATTR_FIELD(padding)
+        .set_default(Array<IndexExpr>({0, 0}))
+        .describe(
+            "If padding is non-zero, then the input is implicitly zero-padded"
+            "Padding support both symmetric and asymmetric as"
+            "one int : same padding used on all sides"
+            "two int : bottom, right will use same padding as top, left"
+            "four int : padding width in the order of (top, left, bottom, right)");
+    TVM_ATTR_FIELD(groups)
+        .describe(
+            "The number of grouped convolution.")
+        .set_default(NullValue<IndexExpr>());
+    TVM_ATTR_FIELD(channels)
+        .describe(
+            "The number of output channels in the convolution."
+            " If it is not set, inferred by shape of the weight.")
+        .set_default(NullValue<IndexExpr>());
+    TVM_ATTR_FIELD(kernel_size)
+        .describe("Specifies the dimensions of the convolution window.")
+        .set_default(NullValue<Array<IndexExpr>>());
+    TVM_ATTR_FIELD(data_layout)
+        .set_default("NHWC")
+        .describe(
+            "Dimension ordering of input data. Can be 'NCHW', 'NHWC', etc."
+            "'N', 'C', 'H', 'W' stands for batch, channel, height, and width"
+            "dimensions respectively. Convolution is applied on the 'H' and"
+            "'W' dimensions.");
+    TVM_ATTR_FIELD(kernel_layout)
+        .set_default("HWIO")
+        .describe(
+            "Dimension ordering of weight. Can be 'OIHW', 'OIHW16o16i', etc."
+            "'O', 'I', 'H', 'W' stands for num_filter, input_channel, height, and width"
+            "dimensions respectively.");
+
+  }
+};  // struct FusedopAttrs
+
 }  // namespace relay
 }  // namespace tvm
 #endif  // TVM_RELAY_ATTRS_TRANSFORM_H_

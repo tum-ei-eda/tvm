@@ -4004,6 +4004,81 @@ RELAY_REGISTER_OP("invert_permutation")
     .set_support_level(1)
     .set_attr<TOpPattern>("TOpPattern", kInjective)
     .set_attr<TOpIsStateful>("TOpIsStateful", false);
+    
+TVM_REGISTER_NODE_TYPE(FusedopAttrs);
+    
+bool FusedopRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
+               const TypeReporter& reporter) {//TODO:Relation überarbeiten!
+  // types: [data, filter,bias, output]
+  ICHECK_EQ(types.size(), 4) << "Expects four types, three for the inputs and one for the output";
+  const auto* data = types[0].as<TensorTypeNode>();
+  if (data == nullptr) {
+    ICHECK(types[0].as<IncompleteTypeNode>())
+        << "Fusedop: expect input type to be TensorType but get " << types[0];
+    return false;
+  }
+
+  const auto* filter = types[1].as<TensorTypeNode>();
+  if (filter == nullptr) {
+    ICHECK(types[1].as<IncompleteTypeNode>())
+        << "Fusedop: expect filter type to be TensorType but get " << types[1];
+    return false;
+  }
+
+  const auto* bias = types[2].as<TensorTypeNode>();
+  if (bias == nullptr) {
+    ICHECK(types[2].as<IncompleteTypeNode>())
+        << "Fusedop: expect bias type to be TensorType but get " << types[2];
+    return false;
+  }
+
+
+  const auto* param = attrs.as<FusedopAttrs>();
+
+
+
+  auto dtype = param->dtype;
+  if (dtype.is_void()) {
+    dtype = data->dtype;
+  }
+
+  reporter->Assign(types[3], TensorType({data->shape[0],indexdiv((data->shape[1]-(filter->shape[0]-1)),2),indexdiv((data->shape[2]-(filter->shape[1]-1)),2),  filter->shape[3]}, dtype));
+
+  return true;
+}
+
+RELAY_REGISTER_OP("fusedops")
+    .describe(
+        R"doc(Return the fused Sequence of Operators, optimized along a given axis.)doc" TVM_ADD_FILELINE)
+    .set_num_inputs(3)
+    .add_argument("data", "Tensor", "The input tensor.")
+    .add_argument("filter", "Tensor", "The filter tensor.")
+        .add_argument("bias", "Tensor", "The filter tensor.")
+    .set_support_level(3)//TODO: welcher level?
+    .add_type_rel("FuseOps", FusedopRel)
+    .set_attr<TOpPattern>("TOpPattern", kOpaque);//TODO:was macht das hier?
+
+Expr MakeFuseseq(Expr data, Expr filter, Expr bias, Integer axis, DataType dtype, Array<IndexExpr> pool_size, Array<IndexExpr> pool_strides, Array<IndexExpr> pool_padding, String pool_layout, IndexExpr bias_axis, Array<IndexExpr> padding, IndexExpr groups, IndexExpr channels, Array<IndexExpr> kernel_size, String data_layout, String kernel_layout) {
+  auto attrs = make_object<FusedopAttrs>();
+  attrs->dtype = dtype;
+  attrs->pool_size = pool_size;
+  attrs->pool_strides = pool_strides;
+  attrs->pool_padding = pool_padding;
+  attrs->pool_layout = pool_layout;
+  attrs->bias_axis = bias_axis;
+  attrs->axis = axis;
+  attrs->padding = padding;
+  attrs->groups = groups;
+  attrs->channels = channels;
+  attrs->kernel_size = kernel_size;
+  attrs->data_layout = data_layout;
+  attrs->kernel_layout = kernel_layout;
+  static const Op& op = Op::Get("fusedops");
+  return Call(op, {data, filter, bias}, Attrs(attrs), {});
+}
+
+TVM_REGISTER_GLOBAL("relay.op._make.fuseseq").set_body_typed(MakeFuseseq);
+
 
 }  // namespace relay
 }  // namespace tvm

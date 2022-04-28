@@ -1731,3 +1731,23 @@ def einsum_strategy(attrs, inputs, out_type, target):
         name="einsum.generic",
     )
     return strategy
+    
+def wrap_compute_Fuseop(topi_compute):
+    """Wrap Fuseop topi compute"""
+
+    def _compute_Fuseop(attrs, inputs, _):
+        return [topi_compute(inputs[0], inputs[1], inputs[2], attrs.axis, attrs.dtype, attrs.pool_size, attrs.pool_strides, attrs.pool_padding, attrs.pool_layout, attrs.bias_axis, attrs.padding, attrs.groups, attrs.channels, attrs.kernel_size, attrs.data_layout, attrs.kernel_layout)]
+
+    return _compute_Fuseop
+
+
+@override_native_generic_func("Fuseop_strategy")
+def Fuseop_strategy(attrs, inputs, out_type, target):
+    """Fuseop generic strategy"""
+    strategy = _op.OpStrategy()
+    strategy.add_implementation(
+        wrap_compute_Fuseop(topi.Fuseseq),
+        wrap_topi_schedule(topi.generic.schedule_extern),
+        name="FuseSequence",
+    )
+    return strategy
