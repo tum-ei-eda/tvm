@@ -1,0 +1,12 @@
+numpy
+scipy
+tflite
+decorator
+attrs
+cloudpickle
+tornado
+pyyaml
+psutil
+typing_extensions
+pytest
+black
