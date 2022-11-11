@@ -29,9 +29,9 @@ then
     export LLVM=$DL_DIR/llvm13
     if [[ ! -d $LLVM ]]
     then
-        wget https://syncandshare.lrz.de/getlink/fiDmr2yoqLFDokH3DjT9eJ/llvm13.tar.gz -O $DL_DIR/llvm13.tar.gz
+        wget https://syncandshare.lrz.de/dl/fiDmr2yoqLFDokH3DjT9eJ/llvm13.tar.gz -O $DL_DIR/llvm13.tar.gz
         mkdir -p $LLVM
-        tar -xf $DL_DIR/llvm13.tar.gz $LLVM
+        tar -xf $DL_DIR/llvm13.tar.gz -C $LLVM
         rm $DL_DIR/llvm13.tar.gz
         echo "Successfully installed LLVM."
     else
