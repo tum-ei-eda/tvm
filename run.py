@@ -18,10 +18,10 @@ parser = argparse.ArgumentParser(description="TVM Script")
 MODELS = ["aww", "vww", "resnet", "toycar"]
 
 parser.add_argument("model", metavar="MODEL", type=str, choices=MODELS, help="The model name (choices: %(choices)s)")
-parser.add_argument("--arch", type=str, default="rv32gc", choices=["rv32gc", "rv32gcp"], help="The RISC-V architecture used by the compiler (default: %(default)s)")
+parser.add_argument("--arch", type=str, default="rv32gcp", choices=["rv32gc", "rv32gcp"], help="The RISC-V architecture used by the compiler (default: %(default)s)")
 parser.add_argument("--abi", type=str, default="ilp32d", choices=["ilp32", "ilp32d"], help="The RISC-V architecture used by the compiler (default: %(default)s)")
-parser.add_argument("--device", type=str, default="arm_cpu", choices=[None, "arm_cpu"], help="The used target device to determine the TVM schedules (default: %(default)s)")
-parser.add_argument("--cpu", type=str, default="cortex-m7", choices=["cortex-m0", "cortex-m7"], help="Used to identify which CPU features are available (default: %(default)s)")
+parser.add_argument("--device", type=str, default=None, choices=[None, "arm_cpu"], help="The used target device to determine the TVM schedules (default: %(default)s)")
+parser.add_argument("--cpu", type=str, default="cortex-m7", choices=[None, "cortex-m0", "cortex-m7"], help="Used to identify which CPU features are available (default: %(default)s)")
 parser.add_argument("--data-layout", type=str, default=None, choices=["NHWC", "NCHW"], help="Transform the data layout in the graph (optional)")
 parser.add_argument(
     "--kernel-layout", type=str, default="default", choices=["default", "HWOI", "HWIO", "IHWO", "OHWI"], help="Transform the kernel layout in the graph (default: %(default)s)"
@@ -74,8 +74,6 @@ except AttributeError:
 ######################################################################
 # Parse the python model object to convert it into a relay module
 # and weights.
-# It is important to note that the input tensor name must match what
-# is contained in the model.
 
 mod, params = relay.frontend.from_tflite(
     tflite_model, shape_dict={input_tensor: input_shape}, dtype_dict={input_tensor: input_dtype}
@@ -85,8 +83,14 @@ mod, params = relay.frontend.from_tflite(
 # Defining the target
 
 RUNTIME = tvm.relay.backend.Runtime("crt", {"system-lib": True})
-# TARGET = tvm.target.target.micro("stm32f746xx")
-TARGET = tvm.target.target.micro("host")
+
+target_str = "c"
+if args.device:
+    target_str += f" -device={args.device}"
+    if args.cpu:
+        target_str += f" -mcpu={args.cpu}"
+
+TARGET = target_str
 
 
 ######################################################################
@@ -126,8 +130,7 @@ with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": Tru
 
 c_source_module = module.get_lib().imported_modules[0]
 c_source_code = c_source_module.get_source()
-first_few_lines = c_source_code.split("\n")[:10]
-print("\n".join(first_few_lines))
+# print(c_source_code)
 
 
 ######################################################################
