@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# exit when any command fails
+# set -e
+
 DOWNLOAD=1
 
 export DIR=$(pwd)

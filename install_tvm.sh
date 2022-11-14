@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# exit when any command fails
+set -e
+
 if [ -z ${DIR} ]
 then
     echo "Please run \`source env.sh\` first!"
