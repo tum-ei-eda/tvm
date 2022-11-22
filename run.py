@@ -109,15 +109,16 @@ if args.data_layout:
         ]
     )
 
-    try:
-        mod = seq(mod)
-    except Exception as err:
-        raise RuntimeError("Error converting layout to {0}: {1}".format(desired_layout, str(err)))
+    with tvm.transform.PassContext(opt_level=3):
+        try:
+            mod = seq(mod)
+        except Exception as err:
+            raise RuntimeError("Error converting layout to {0}: {1}".format(":".join([args.data_layout, args.kernel_layout]), str(err)))
 
 ######################################################################
 # Now, compile the model for the target:
 
-with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=["AlterOpLayout"]):
+with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):
     module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params)
 
 ######################################################################
