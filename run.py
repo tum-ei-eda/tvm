@@ -1,17 +1,12 @@
 import os
-import json
-import tarfile
 import pathlib
-import tempfile
 import shutil
 import argparse
-import numpy as np
 
 import tvm
-from tvm import relay
+from tvm import relay, transform
 import tvm.contrib.utils
 from tvm.contrib.download import download_testdata
-from tvm import relay, transform
 
 parser = argparse.ArgumentParser(description="TVM Script")
 
