@@ -128,6 +128,7 @@ def gemm_MxKxN_impl(M, K, N, uniq_id):
     # TODO(weberlo, areusch): are there any SIMD tricks to zero out arrays quickly?
     # aa_pad_size = M * K
     bb_pad_size = N * K
+    print("debug:    bb_pad_size = N * K")
     # code reference: CMSIS-NN paper (https://arxiv.org/abs/1801.06601)
     cc_code = (
         common.common_includes
@@ -137,7 +138,7 @@ def gemm_MxKxN_impl(M, K, N, uniq_id):
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm_{M}x{N}_body_rest_{uniq_id}(
+__attribute__((always_inline)) static inline int32_t gemm_{M}x{N}_body_rest_{uniq_id}(
     int K,
     int8_t *aa, int8_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
@@ -180,7 +181,7 @@ __STATIC_FORCEINLINE int32_t gemm_{M}x{N}_body_rest_{uniq_id}(
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm_{M}x{K}x{N}_body_loop_{uniq_id}(
+__attribute__((always_inline)) static inline int32_t gemm_{M}x{K}x{N}_body_loop_{uniq_id}(
     int8_t *aa, int8_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
   for (int i = 0; i < {M}; i++) {{
@@ -201,7 +202,7 @@ __STATIC_FORCEINLINE int32_t gemm_{M}x{K}x{N}_body_loop_{uniq_id}(
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm_{M}x{K}x{N}_body_{uniq_id}(
+__attribute__((always_inline)) static inline int32_t gemm_{M}x{K}x{N}_body_{uniq_id}(
     int8_t *aa, int8_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
   int16_t bb_pad[{bb_pad_size}];
@@ -246,7 +247,7 @@ out:
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm_{M}x{N}_update_rest_{uniq_id}(
+__attribute__((always_inline)) static inline int32_t gemm_{M}x{N}_update_rest_{uniq_id}(
     int K,
     int8_t *aa, int8_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
@@ -289,7 +290,7 @@ __STATIC_FORCEINLINE int32_t gemm_{M}x{N}_update_rest_{uniq_id}(
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm_{M}x{K}x{N}_update_loop_{uniq_id}(
+__attribute__((always_inline)) static inline int32_t gemm_{M}x{K}x{N}_update_loop_{uniq_id}(
     int8_t *aa, int8_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
   for (int i = 0; i < {M}; i++) {{
@@ -307,7 +308,7 @@ __STATIC_FORCEINLINE int32_t gemm_{M}x{K}x{N}_update_loop_{uniq_id}(
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm_{M}x{K}x{N}_update_{uniq_id}(
+__attribute__((always_inline)) static inline int32_t gemm_{M}x{K}x{N}_update_{uniq_id}(
     int8_t *aa, int8_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
   int16_t bb_pad[{bb_pad_size}];
@@ -349,7 +350,7 @@ out:
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm16_{M}x{N}_body_rest_{uniq_id}(
+__attribute__((always_inline)) static inline int32_t gemm16_{M}x{N}_body_rest_{uniq_id}(
     int K,
     int16_t *aa, int16_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
@@ -367,7 +368,7 @@ __STATIC_FORCEINLINE int32_t gemm16_{M}x{N}_body_rest_{uniq_id}(
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm16_{M}x{K}x{N}_body_loop_{uniq_id}(
+__attribute__((always_inline)) static inline int32_t gemm16_{M}x{K}x{N}_body_loop_{uniq_id}(
     int16_t *aa, int16_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
   for (int i = 0; i < {M}; i++) {{
@@ -388,7 +389,7 @@ __STATIC_FORCEINLINE int32_t gemm16_{M}x{K}x{N}_body_loop_{uniq_id}(
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm16_{M}x{K}x{N}_body_{uniq_id}(
+__attribute__((always_inline)) static inline int32_t gemm16_{M}x{K}x{N}_body_{uniq_id}(
     int16_t *aa, int16_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
   int32_t retcode = 0;
@@ -430,7 +431,7 @@ out:
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm16_{M}x{N}_update_rest_{uniq_id}(
+__attribute__((always_inline)) static inline int32_t gemm16_{M}x{N}_update_rest_{uniq_id}(
     int K,
     int16_t *aa, int16_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
@@ -448,7 +449,7 @@ __STATIC_FORCEINLINE int32_t gemm16_{M}x{N}_update_rest_{uniq_id}(
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm16_{M}x{K}x{N}_update_loop_{uniq_id}(
+__attribute__((always_inline)) static inline int32_t gemm16_{M}x{K}x{N}_update_loop_{uniq_id}(
     int16_t *aa, int16_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
   for (int i = 0; i < {M}; i++) {{
@@ -466,7 +467,7 @@ __STATIC_FORCEINLINE int32_t gemm16_{M}x{K}x{N}_update_loop_{uniq_id}(
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm16_{M}x{K}x{N}_update_{uniq_id}(
+__attribute__((always_inline)) static inline int32_t gemm16_{M}x{K}x{N}_update_{uniq_id}(
     int16_t *aa, int16_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
   int32_t retcode = 0;
@@ -500,7 +501,7 @@ out:
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t gemm_{M}x{K}x{N}_reset_{uniq_id}(int32_t *cc, int C_stride) {{
+__attribute__((always_inline)) static inline int32_t gemm_{M}x{K}x{N}_reset_{uniq_id}(int32_t *cc, int C_stride) {{
   for (int i = 0; i < {M}; i++) {{
     for (int j = 0; j < {N}; j++) {{
       cc[i*C_stride + j] = 0;

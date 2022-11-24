@@ -125,7 +125,7 @@ def tensordot_impl(in_dtype: str, tensor_h: int, jump: int, tensor_w: int, suffi
         (
             f"""
         #include <stdint.h>
-        #include <arm_nnsupportfunctions.h>
+        #include <rvp_intrinsic.h>
 
         #ifdef __cplusplus
         extern "C"

@@ -24,7 +24,7 @@ parser.add_argument("--device", type=str, default=None, choices=[None, "arm_cpu"
 parser.add_argument("--cpu", type=str, default="cortex-m7", choices=[None, "cortex-m0", "cortex-m7"], help="Used to identify which CPU features are available (default: %(default)s)")
 parser.add_argument("--data-layout", type=str, default=None, choices=["NHWC", "NCHW"], help="Transform the data layout in the graph (optional)")
 parser.add_argument(
-    "--kernel-layout", type=str, default="default", choices=["default", "HWOI", "HWIO", "IHWO", "OHWI"], help="Transform the kernel layout in the graph (default: %(default)s)"
+    "--kernel-layout", type=str, default="default", choices=["default", "IOHW", "HWOI", "HWIO", "IHWO", "OHWI", "OIHW"], help="Transform the kernel layout in the graph (default: %(default)s)"
 )
 parser.add_argument("--verbose", action="store_true", help="Show all compilation outputs")
 parser.add_argument("--profile", action="store_true", help="Profile the model execution layer by layer")
@@ -114,16 +114,17 @@ if args.data_layout:
         ]
     )
 
-    try:
-        mod = seq(mod)
-    except Exception as err:
-        raise RuntimeError("Error converting layout to {0}: {1}".format(desired_layout, str(err)))
+    with tvm.transform.PassContext(opt_level=3):
+        try:
+            mod = seq(mod)
+        except Exception as err:
+            raise RuntimeError("Error converting layout to {0}: {1}".format(":".join([args.data_layout, args.kernel_layout]), str(err)))
+
 
 ######################################################################
 # Now, compile the model for the target:
 
-with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=["AlterOpLayout"]):
-    module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params)
+with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):    module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params)
 
 ######################################################################
 # Inspecting the compilation output
