@@ -124,7 +124,11 @@ if args.data_layout:
 ######################################################################
 # Now, compile the model for the target:
 
-with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):    module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params)
+executor = relay.backend.Executor("graph", {"link-params": True})
+# executor = relay.backend.Executor("graph", {"link-params": False})
+
+with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):    module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params, executor=executor)
+# with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):    module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params)
 
 ######################################################################
 # Inspecting the compilation output

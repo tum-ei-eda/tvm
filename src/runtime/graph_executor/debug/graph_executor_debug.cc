@@ -167,6 +167,10 @@ class GraphExecutorDebug : public GraphExecutor {
     uint32_t num_inputs = param.num_inputs;
     uint32_t num_outputs = param.num_outputs;
 
+    if (name == "__nop") {
+        return results;
+    }
+
     PackedFunc time_eval =
         runtime::Registry::Get("runtime.RPCTimeEvaluator")
             ->
