@@ -23,7 +23,7 @@ ABI ?= ilp32d
 INCLUDES ?= -isystem crt/include -Icrt_config -I./src/
 # CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -Wno-error=stringop-overread -Wno-error=format-extra-args -march=$(ARCH) -mabi=$(ABI) -O3
 
-CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -Wno-error=pointer-sign -march=$(ARCH) -mabi=$(ABI) -O3
+CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -Wno-error=pointer-sign -march=$(ARCH) -mabi=$(ABI) -O3 -Wno-error=unused-const-variable
 CXXFLAGS ?= -Werror -Wall -std=c++11 -DTVM_HOST_USE_GRAPH_EXECUTOR_MODULE -march=$(ARCH) -mabi=$(ABI) -O3
 LDFLAGS ?= -Werror -Wall -march=$(ARCH) -mabi=$(ABI)
 

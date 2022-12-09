@@ -36,6 +36,11 @@ def dense_dsp_compute(cfg, data, weight, bias=None, out_dtype=None):
     cfg.define_split("tile_y", N, policy="factors", num_outputs=2)
     cfg.define_split("tile_k", K, policy="factors", num_outputs=2)
 
+    if cfg.is_fallback:
+        cfg.fallback_split("tile_x", [-1, M])
+        cfg.fallback_split("tile_y", [-1, N])
+        cfg.fallback_split("tile_k", [-1, K])
+
     k = te.reduce_axis((0, K), "k")
     C = te.compute(
         (M, N),
