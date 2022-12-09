@@ -7,6 +7,9 @@ import shutil
 import argparse
 import numpy as np
 
+
+from contextlib import contextmanager, nullcontext
+
 import tvm
 from tvm import relay
 import tvm.contrib.utils
@@ -28,6 +31,7 @@ parser.add_argument(
 )
 parser.add_argument("--verbose", action="store_true", help="Show all compilation outputs")
 parser.add_argument("--profile", action="store_true", help="Profile the model execution layer by layer")
+parser.add_argument("--disable-legalize", action="store_true", help="Force int8 data in conv2d and dense layers")
 
 args = parser.parse_args()
 
@@ -127,7 +131,25 @@ if args.data_layout:
 executor = relay.backend.Executor("graph", {"link-params": True})
 # executor = relay.backend.Executor("graph", {"link-params": False})
 
-with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):    module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params, executor=executor)
+
+@contextmanager
+def OptionallyDisableLegalize(disableLegalize):
+    if not disableLegalize:
+        yield nullcontext()
+        return
+    from tvm.relay.testing.temp_op_attr import TempOpAttr
+
+    def do_not_legalize(attrs, inputs, types):
+        print("do_not_legalize")
+        return None
+
+    with TempOpAttr("qnn.dense", "FTVMQnnLegalize", do_not_legalize) as denseCtx:
+        with TempOpAttr("qnn.conv2d", "FTVMQnnLegalize", do_not_legalize) as convCtx:
+            yield (denseCtx, convCtx)
+
+with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):
+    with OptionallyDisableLegalize(args.disable_legalize):
+        module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params, executor=executor)
 # with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):    module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params)
 
 ######################################################################
