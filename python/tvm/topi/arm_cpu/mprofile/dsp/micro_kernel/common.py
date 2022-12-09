@@ -28,6 +28,37 @@ common_includes = """
 
 #include <tvm/runtime/crt/error_codes.h>
 
+#ifndef READPAD
+#define READPAD
+static inline __attribute__((always_inline)) int32_t arm_nn_read_s8x4_ia(const int8_t **in_s8)
+{
+    int32_t val;
+    memcpy(&val, *in_s8, 4);
+    *in_s8 += 4;
+
+    return (val);
+}
+
+static inline __attribute__((always_inline)) const int8_t *read_and_pad(const int8_t *source, int32_t *out1, int32_t *out2)
+{
+    int32_t inA = arm_nn_read_s8x4_ia(&source);
+    int32_t inAbuf1 = __rv_sunpkd831((uint32_t)inA);
+    int32_t inAbuf2 = __rv_sunpkd820(inA);
+
+#ifndef ARM_MATH_BIG_ENDIAN
+    *out2 = (int32_t)(__rv_pktb16(inAbuf1, inAbuf2));
+    *out1 = (int32_t)(__rv_pkbt16(inAbuf2, inAbuf1));
+#else
+    *out1 = (int32_t)(__rv_pktb16(inAbuf1, inAbuf2));
+    *out2 = (int32_t)(__rv_pkbt16(inAbuf2, inAbuf1));
+#endif
+
+    return source;
+}
+#endif 
+
+
+
 """
 
 MICRO_WORD_LENGTH_BITS = 32

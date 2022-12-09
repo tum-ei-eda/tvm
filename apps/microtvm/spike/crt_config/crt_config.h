@@ -34,16 +34,16 @@
 #define TVM_CRT_MAX_NDIM 6
 
 /*! Maximum supported arguments in generated functions */
-#define TVM_CRT_MAX_ARGS 10
+#define TVM_CRT_MAX_ARGS 20
 
 /*! Size of the global function registry, in bytes. */
-#define TVM_CRT_GLOBAL_FUNC_REGISTRY_SIZE_BYTES 512
+#define TVM_CRT_GLOBAL_FUNC_REGISTRY_SIZE_BYTES 1024
 
 /*! Maximum number of registered modules. */
 #define TVM_CRT_MAX_REGISTERED_MODULES 2
 
 /*! Maximum packet size, in bytes, including the length header. */
-#define TVM_CRT_MAX_PACKET_SIZE_BYTES 2048
+#define TVM_CRT_MAX_PACKET_SIZE_BYTES 4096
 
 /*! Maximum supported string length in dltype, e.g. "int8", "int16", "float32" */
 #define TVM_CRT_MAX_STRLEN_DLTYPE 10

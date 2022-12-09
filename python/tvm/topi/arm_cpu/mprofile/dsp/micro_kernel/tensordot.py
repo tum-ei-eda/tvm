@@ -100,17 +100,17 @@ def tensordot_impl(in_dtype: str, tensor_h: int, jump: int, tensor_w: int, suffi
 
     if in_dtype == "int8":
         inner_loop = """
-              uint32_t tensor_c20 = __SXTB16(tensor_batch);
-              uint32_t kernel_c20 = __SXTB16(kernel_batch);
-              sum = __SMLAD(tensor_c20, kernel_c20, sum);
+              uint32_t tensor_c20 = __rv_sunpkd820(tensor_batch);
+              uint32_t kernel_c20 = __rv_sunpkd820(kernel_batch);
+              sum = __rv_KMADA(sum, tensor_c20, kernel_c20);
 
-              uint32_t tensor_c31 = __SXTB16(__ROR(tensor_batch, 8));
-              uint32_t kernel_c31 = __SXTB16(__ROR(kernel_batch, 8));
-              sum = __SMLAD(tensor_c31, kernel_c31, sum);"""
+              uint32_t tensor_c31 = __rv_sunpkd831(tensor_batch);
+              uint32_t kernel_c31 = __rv_sunpkd831(kernel_batch);
+              sum = __rv_KMADA(sum, tensor_c31, kernel_c31);"""
 
     elif in_dtype == "int16":
         inner_loop = """
-              sum = __SMLAD(tensor_batch, kernel_batch, sum);"""
+              sum = __rv_KMADA(sum, tensor_batch, kernel_batch);"""
 
     elif in_dtype == "int32":
         inner_loop = """

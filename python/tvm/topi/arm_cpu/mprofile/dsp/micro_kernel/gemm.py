@@ -134,7 +134,6 @@ def gemm_MxKxN_impl(M, K, N, uniq_id):
         common.common_includes
         + f"""
 
-
 #ifdef __cplusplus
 extern "C"
 #endif
@@ -227,7 +226,7 @@ __attribute__((always_inline)) static inline int32_t gemm_{M}x{K}x{N}_body_{uniq
       int32_t *bb_ptr = (int32_t *) &bb_pad[j*{K}];
       int32_t sum = 0;
       for (int l = 0; l < 2 * ({K} / 4); l++) {{
-        sum = __SMLAD(*aa_ptr, *bb_ptr, sum);
+        sum = __rv_kmada(sum, *aa_ptr, *bb_ptr);
         ++ aa_ptr; ++ bb_ptr;
       }}
       // NOTE: this is the line where `*_body` differs from `*_update`. here
@@ -333,7 +332,7 @@ __attribute__((always_inline)) static inline int32_t gemm_{M}x{K}x{N}_update_{un
       int32_t *bb_ptr = (int32_t *) &bb_pad[j*{K}];
       int32_t sum = 0;
       for (int l = 0; l < 2 * ({K} / 4); l++) {{
-        sum = __SMLAD(*aa_ptr, *bb_ptr, sum);
+        sum = __rv_kmada(sum, *aa_ptr, *bb_ptr);
         ++ aa_ptr; ++ bb_ptr;
       }}
       cc[i*C_stride + j] += sum;
@@ -411,7 +410,7 @@ __attribute__((always_inline)) static inline int32_t gemm16_{M}x{K}x{N}_body_{un
 
       int32_t sum = 0;
       for (int l = 0; l < {K} / 2; l++) {{
-        sum = __SMLAD(*aa_ptr, *bb_ptr, sum);
+        sum = __rv_kmada(sum, *aa_ptr, *bb_ptr);
         ++ aa_ptr; ++ bb_ptr;
       }}
       // NOTE: this is the line where `*_body` differs from `*_update`. here
@@ -484,7 +483,7 @@ __attribute__((always_inline)) static inline int32_t gemm16_{M}x{K}x{N}_update_{
 
       int32_t sum = 0;
       for (int l = 0; l < {K} / 2; l++) {{
-        sum = __SMLAD(*aa_ptr, *bb_ptr, sum);
+        sum = __rv_kmada(sum, *aa_ptr, *bb_ptr);
         ++ aa_ptr; ++ bb_ptr;
       }}
       cc[i*C_stride + j] += sum;

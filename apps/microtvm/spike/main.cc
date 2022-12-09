@@ -129,7 +129,7 @@ tvm_crt_error_t TVMPlatformGenerateRandom(uint8_t* buffer, size_t num_bytes) {
 }
 }
 
-uint8_t memory[2048 * 1024];
+uint8_t memory[2048 * 1024 * 4];
 
 static char** g_argv = NULL;
 
