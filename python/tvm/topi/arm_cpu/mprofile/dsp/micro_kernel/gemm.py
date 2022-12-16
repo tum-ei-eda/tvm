@@ -141,8 +141,8 @@ __attribute__((always_inline)) static inline int32_t gemm_{M}x{N}_body_rest_{uni
     int K,
     int8_t *aa, int8_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
-  int k_base = ({K} / 4) * 4;
-  switch ( {K} % 4 ) {{
+  int k_base = (K / 4) * 4;
+  switch ( K % 4 ) {{
   case 1:
     for (int i = 0; i < {M}; i++) {{
       for (int j = 0; j < {N}; j++) {{
@@ -243,8 +243,8 @@ __attribute__((always_inline)) static inline int32_t gemm_{M}x{N}_update_rest_{u
     int K,
     int8_t *aa, int8_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
-  int k_base = ({K} / 4) * 4;
-  switch ( {K} % 4 ) {{
+  int k_base = (K / 4) * 4;
+  switch ( K % 4 ) {{
   case 1:
     for (int i = 0; i < {M}; i++) {{
       for (int j = 0; j < {N}; j++) {{
@@ -339,7 +339,7 @@ __attribute__((always_inline)) static inline int32_t gemm16_{M}x{N}_body_rest_{u
     int K,
     int16_t *aa, int16_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
-  int k_base = ({K} / 2) * 2;
+  int k_base = (K / 2) * 2;
   for (int i = 0; i < {M}; i++) {{
     for (int j = 0; j < {N}; j++) {{
       int16_t *a_ptr = &aa[i * A_stride + k_base];
@@ -471,8 +471,9 @@ __attribute__((always_inline)) static inline int32_t gemm16_{M}x{K}x{N}_update_{
       for (int l = 0; l < {K} / 2; l++) {{
         sum = __rv_kmada(sum, *aa_ptr, *bb_ptr);
         ++ aa_ptr; ++ bb_ptr;
-  }}
       }}
+    }}
+  }}
       cc[i*C_stride + j] += sum;
     }}
 
