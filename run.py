@@ -1,20 +1,15 @@
 import os
-import json
-import tarfile
 import pathlib
-import tempfile
 import shutil
 import argparse
-import numpy as np
 
 
 from contextlib import contextmanager, nullcontext
 
 import tvm
-from tvm import relay
+from tvm import relay, transform
 import tvm.contrib.utils
 from tvm.contrib.download import download_testdata
-from tvm import relay, transform
 
 parser = argparse.ArgumentParser(description="TVM Script")
 
@@ -123,11 +118,15 @@ if args.data_layout:
             mod = seq(mod)
         except Exception as err:
             raise RuntimeError("Error converting layout to {0}: {1}".format(":".join([args.data_layout, args.kernel_layout]), str(err)))
+<<<<<<< HEAD
 
+=======
+>>>>>>> e14731ebc5326d8a4564015832bc867842313c72
 
 ######################################################################
 # Now, compile the model for the target:
 
+<<<<<<< HEAD
 executor = relay.backend.Executor("graph", {"link-params": True})
 # executor = relay.backend.Executor("graph", {"link-params": False})
 
@@ -151,6 +150,10 @@ with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": Tru
     with OptionallyDisableLegalize(args.disable_legalize):
         module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params, executor=executor)
 # with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):    module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params)
+=======
+with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):
+    module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params)
+>>>>>>> e14731ebc5326d8a4564015832bc867842313c72
 
 ######################################################################
 # Inspecting the compilation output
