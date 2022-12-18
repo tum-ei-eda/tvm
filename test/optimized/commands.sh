@@ -16,11 +16,13 @@ do
         echo data layout:$data_layout
 
         # for kernel in 'HWIO' 'OIHW'
-        for kernel in 'default'
+        for kernel in 'default' 'HWIO'
         do
             echo ----------------------------------------------------
             echo kernel layout:$kernel
-            python3 run.py $model --data-layout $data_layout --kernel-layout $kernel  --profile
-        done
+            #python3 run.py $model --data-layout $data_layout --kernel-layout $kernel  --profile
+            python3 run.py $model --data-layout $data_layout --kernel-layout $kernel --device arm_cpu --profile --verbose
+
+		done
     done
 done
