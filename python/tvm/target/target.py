@@ -662,7 +662,7 @@ def riscv_cpu(model="sifive-u54", options=None):
     }
     pre_defined_opt = trans_table.get(model, ["-model=%s" % model])
 
-    opts = ["-keys=arm_cpu,cpu", "-device=arm_cpu"] + pre_defined_opt
+    opts = ["-keys=riscv_cpu,cpu", "-device=riscv_cpu"] + pre_defined_opt
     opts = _merge_opts(opts, options)
     return Target(" ".join(["llvm"] + opts))
 
