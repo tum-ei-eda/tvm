@@ -202,6 +202,11 @@ class Target(Object):
         return list(self.attrs.get("mattr", []))
 
     @property
+    def march(self):
+        """Returns the march from the target if it exists."""
+        return list(self.attrs.get("march", []))
+
+    @property
     def supports_integer_dot_product(self):
         if self.attrs.get("supports_integer_dot_product", []):
             return bool(self.attrs["supports_integer_dot_product"])
@@ -589,6 +594,7 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-model=sifive-e31",
             "-mtriple=riscv32-unknown-linux-gnu",
             "-mcpu=sifive-e31",
+            "-march=rv32imac",
             "-mabi=ilp32",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv32imac -mabi=ilp32 -mcpu=sifive-e31
         ],
@@ -596,6 +602,7 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-model=sifive-e76",
             "-mtriple=riscv32-unknown-linux-gnu",
             "-mcpu=sifive-e76",
+            "-march=rv32imafc",
             "-mabi=ilp32",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv32imafc -mabi=ilp32 -mcpu=sifive-e76
         ],
@@ -603,6 +610,7 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-model=sifive-u54",
             "-mtriple=riscv64-unknown-linux-gnu",
             "-mcpu=sifive-u54",
+            "-march=rv64gc",
             "-mabi=lp64d",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv64gc -mabi=lp64d -mcpu=sifive-u54
         ],
@@ -610,6 +618,7 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-model=sifive-u74",
             "-mtriple=riscv64-unknown-linux-gnu",
             "-mcpu=sifive-u74",
+            "-march=rv64gc",
             "-mabi=lp64d",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv64gc -mabi=lp64d -mcpu=sifive-u74
         ],
