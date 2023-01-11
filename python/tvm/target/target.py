@@ -622,6 +622,43 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-mabi=lp64d",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv64gc -mabi=lp64d -mcpu=sifive-u74
         ],
+        # See: https://github.com/riscvarchive/riscv-cores-list
+        "xuantie-c906": [  # licheerv/d1nezha
+            "-model=xuantie-c906",
+            "-mtriple=riscv64-unknown-linux-gnu",
+            "-mcpu=xuantie-c906",
+            "-march=rv64gcvxthead",
+            "-mabi=lp64d"
+            # cc: ?
+            # -mtune=c906 -mcmodel=?, rename to riscv_c906/xuantie c906?, also: C910,E906,E902
+        ],
+        "spike-rv32": [  # rename to generic_rv32?
+            "-model=spike-rv32",
+            "-mcpu=generic-rv32",
+            "-mtriple=riscv64-unknown-elf",
+            "-march=rv32gc",  # rv32gcv/rv32gcp?
+            "-mabi=ilp32d",
+            "-mattr=+a,+c,+d,+f,+m,",  # +v/+p?
+            # cc: ?
+        ],
+        "spike-rv64": [  # rename to generic_rv32?
+            "-model=spike-rv64",
+            "-mcpu=generic-rv64",
+            "-mtriple=riscv64-unknown-elf",
+            "-march=rv64gc",  # rv64gcv/rv64gcp?
+            "-mabi=lp64d"
+            "-mattr=+a,+c,+d,+f,+m,",  # +v/+p?
+            # cc: ?
+        ],
+        "esp32c3": [
+            "-model=esp32c3",
+            "-mcpu=esp32c3",
+            "-mtriple=riscv32-esp-elf",
+            "-march=rv32imafc",
+            "-mabi=ilp32f"
+            "-mattr=+a,+c,+f,+m,",
+            # cc: ?
+        ]
     }
     pre_defined_opt = trans_table.get(model, ["-model=%s" % model])
 
