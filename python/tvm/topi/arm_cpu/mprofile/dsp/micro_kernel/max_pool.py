@@ -146,8 +146,8 @@ __STATIC_FORCEINLINE int32_t max8_{uniq_id}(
   for ( int i = 0; i < N / 4; ++ i ) {{
     int32_t arg32 = *parg32 ++;
     int32_t res32 = *pres32;
-    __SSUB8(arg32, res32);
-    res32 = __SEL(arg32, res32);
+    __rv_sub8((arg32, res32);
+    res32 = __rv_smax8(arg32, res32);
     *pres32 ++ = res32;
   }}
 

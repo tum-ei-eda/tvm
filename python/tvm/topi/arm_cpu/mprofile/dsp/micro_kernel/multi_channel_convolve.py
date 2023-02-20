@@ -109,9 +109,9 @@ def _quad_int8_channel_convolve_impl(_tensor_h, tensor_w, channels, kernel_h, ke
         (
             f"""
         #include <stdint.h>
-        #include <arm_nnsupportfunctions.h>
+        #include <rvp_intrinsic.h>
 
-        // __SXTB16(_ROR(X, Y)) is combined into one assembly instruction
+        // __rv_sunpkd820(X, Y) is combined into one assembly instruction
 
         #define TVMGEN_QUAD_INT8_CHANNEL_REARRANGE_SUM_DSP( \
             arranged_kernel, \
@@ -120,15 +120,15 @@ def _quad_int8_channel_convolve_impl(_tensor_h, tensor_w, channels, kernel_h, ke
           \
           uint32_t kernel_c3210 = *arranged_kernel++; \
           \
-          uint32_t tensor_c20 = __SXTB16(tensor_c3210); \
-          uint32_t kernel_c20 = __SXTB16(kernel_c3210); \
-          sum_c0 = __builtin_arm_smlabb(tensor_c20, kernel_c20, sum_c0); \
-          sum_c2 = __builtin_arm_smlatt(tensor_c20, kernel_c20, sum_c2); \
+          uint32_t tensor_c20 = __rv_sunpkd820(tensor_c3210); \
+          uint32_t kernel_c20 = __rv_sunpkd820(kernel_c3210); \
+          sum_c0 = __rv_smbb16(tensor_c20, kernel_c20); \
+          sum_c2 = __rv_smtt16(tensor_c20, kernel_c20); \
           \
-          uint32_t tensor_c31 = __SXTB16(__ROR(tensor_c3210, 8)); \
-          uint32_t kernel_c31 = __SXTB16(__ROR(kernel_c3210, 8)); \
-          sum_c1 = __builtin_arm_smlabb(tensor_c31, kernel_c31, sum_c1); \
-          sum_c3 = __builtin_arm_smlatt(tensor_c31, kernel_c31, sum_c3); \
+          uint32_t tensor_c31 = __rv_sunpkd831(tensor_c3210); \
+          uint32_t kernel_c31 = __rv_sunpkd831(kernel_c3210); \
+          sum_c1 = __rv_smbb16(tensor_c31, kernel_c31); \
+          sum_c3 = __rv_smtt16(tensor_c31, kernel_c31); \
         }}
 
         /* We do four channels at once to get this speed boost. */
@@ -194,8 +194,8 @@ def _dual_int16_channel_convolve_impl(_tensor_h, tensor_w, channels, kernel_h, k
               uint32_t tensor_c10 = *(tensor + j * {channels // 2}
                 + i * {tensor_w * (channels // 2)});
               uint32_t kernel_c10 = *kernel++;
-              sum_c0 = __builtin_arm_smlabb(tensor_c10, kernel_c10, sum_c0);
-              sum_c1 = __builtin_arm_smlatt(tensor_c10, kernel_c10, sum_c1);
+              sum_c0 = __rv_smbb16(tensor_c10, kernel_c10);
+              sum_c1 = __rv_smtt16(tensor_c10, kernel_c10);
             }}
           }}
 

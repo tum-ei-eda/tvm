@@ -1,0 +1,472 @@
+§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§
+modle: aww
+----------------------------------------------------
+data layout:NHWC , kernel layout:HWIO
+Total_time: 290150.612  -        -               -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:HWOI
+Total_time: 290150.612  -        -               -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:HIOW
+----------------------------------------------------
+data layout:NHWC , kernel layout:HIWO
+----------------------------------------------------
+data layout:NHWC , kernel layout:HOWI
+----------------------------------------------------
+data layout:NHWC , kernel layout:HOIW
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWOH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWHO
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOHW
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOWH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHWO
+Total_time: 290150.612  -        -               -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHOW
+----------------------------------------------------
+data layout:NHWC , kernel layout:OWHI
+----------------------------------------------------
+data layout:NHWC , kernel layout:OWIH
+----------------------------------------------------
+data layout:NHWC , kernel layout:OHIW
+----------------------------------------------------
+data layout:NHWC , kernel layout:OHWI
+Total_time: 290150.612  -        -               -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:OIHW
+----------------------------------------------------
+data layout:NHWC , kernel layout:OIWH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHOW
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHWO
+Total_time: 290150.612  -        -               -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWOH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWHO
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOWH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOHW
+----------------------------------------------------
+data layout:NCHW , kernel layout:HWIO
+Total_time: 290150.612  -        -               -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:HWOI
+Total_time: 290150.612  -        -               -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:HIOW
+----------------------------------------------------
+data layout:NCHW , kernel layout:HIWO
+----------------------------------------------------
+data layout:NCHW , kernel layout:HOWI
+----------------------------------------------------
+data layout:NCHW , kernel layout:HOIW
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWOH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWHO
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOHW
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOWH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHWO
+Total_time: 290150.612  -        -               -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHOW
+----------------------------------------------------
+data layout:NCHW , kernel layout:OWHI
+----------------------------------------------------
+data layout:NCHW , kernel layout:OWIH
+----------------------------------------------------
+data layout:NCHW , kernel layout:OHIW
+----------------------------------------------------
+data layout:NCHW , kernel layout:OHWI
+Total_time: 290150.612  -        -               -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:OIHW
+----------------------------------------------------
+data layout:NCHW , kernel layout:OIWH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHOW
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHWO
+Total_time: 290150.612  -        -               -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWOH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWHO
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOWH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOHW
+§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§
+modle: vww
+----------------------------------------------------
+data layout:NHWC , kernel layout:HWIO
+Total_time: 797773.531  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:HWOI
+Total_time: 797773.531  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:HIOW
+----------------------------------------------------
+data layout:NHWC , kernel layout:HIWO
+----------------------------------------------------
+data layout:NHWC , kernel layout:HOWI
+----------------------------------------------------
+data layout:NHWC , kernel layout:HOIW
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWOH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWHO
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOHW
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOWH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHWO
+Total_time: 797773.531  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHOW
+----------------------------------------------------
+data layout:NHWC , kernel layout:OWHI
+----------------------------------------------------
+data layout:NHWC , kernel layout:OWIH
+----------------------------------------------------
+data layout:NHWC , kernel layout:OHIW
+----------------------------------------------------
+data layout:NHWC , kernel layout:OHWI
+Total_time: 797773.531  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:OIHW
+----------------------------------------------------
+data layout:NHWC , kernel layout:OIWH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHOW
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHWO
+Total_time: 797773.531  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWOH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWHO
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOWH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOHW
+----------------------------------------------------
+data layout:NCHW , kernel layout:HWIO
+Total_time: 797773.531  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:HWOI
+Total_time: 797773.531  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:HIOW
+----------------------------------------------------
+data layout:NCHW , kernel layout:HIWO
+----------------------------------------------------
+data layout:NCHW , kernel layout:HOWI
+----------------------------------------------------
+data layout:NCHW , kernel layout:HOIW
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWOH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWHO
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOHW
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOWH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHWO
+Total_time: 797773.531  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHOW
+----------------------------------------------------
+data layout:NCHW , kernel layout:OWHI
+----------------------------------------------------
+data layout:NCHW , kernel layout:OWIH
+----------------------------------------------------
+data layout:NCHW , kernel layout:OHIW
+----------------------------------------------------
+data layout:NCHW , kernel layout:OHWI
+Total_time: 797773.531  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:OIHW
+----------------------------------------------------
+data layout:NCHW , kernel layout:OIWH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHOW
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHWO
+Total_time: 797773.531  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWOH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWHO
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOWH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOHW
+§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§
+modle: resnet
+----------------------------------------------------
+data layout:NHWC , kernel layout:HWIO
+Total_time: 734040.979  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:HWOI
+Total_time: 734040.979  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:HIOW
+----------------------------------------------------
+data layout:NHWC , kernel layout:HIWO
+----------------------------------------------------
+data layout:NHWC , kernel layout:HOWI
+----------------------------------------------------
+data layout:NHWC , kernel layout:HOIW
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWOH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWHO
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOHW
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOWH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHWO
+Total_time: 734040.979  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHOW
+----------------------------------------------------
+data layout:NHWC , kernel layout:OWHI
+----------------------------------------------------
+data layout:NHWC , kernel layout:OWIH
+----------------------------------------------------
+data layout:NHWC , kernel layout:OHIW
+----------------------------------------------------
+data layout:NHWC , kernel layout:OHWI
+Total_time: 734040.979  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:OIHW
+----------------------------------------------------
+data layout:NHWC , kernel layout:OIWH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHOW
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHWO
+Total_time: 734040.979  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWOH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWHO
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOWH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOHW
+----------------------------------------------------
+data layout:NCHW , kernel layout:HWIO
+Total_time: 734040.979  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:HWOI
+Total_time: 734040.979  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:HIOW
+----------------------------------------------------
+data layout:NCHW , kernel layout:HIWO
+----------------------------------------------------
+data layout:NCHW , kernel layout:HOWI
+----------------------------------------------------
+data layout:NCHW , kernel layout:HOIW
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWOH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWHO
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOHW
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOWH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHWO
+Total_time: 734040.979  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHOW
+----------------------------------------------------
+data layout:NCHW , kernel layout:OWHI
+----------------------------------------------------
+data layout:NCHW , kernel layout:OWIH
+----------------------------------------------------
+data layout:NCHW , kernel layout:OHIW
+----------------------------------------------------
+data layout:NCHW , kernel layout:OHWI
+Total_time: 734040.979  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:OIHW
+----------------------------------------------------
+data layout:NCHW , kernel layout:OIWH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHOW
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHWO
+Total_time: 734040.979  -        -                -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWOH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWHO
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOWH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOHW
+§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§§
+modle: toycar
+----------------------------------------------------
+data layout:NHWC , kernel layout:HWIO
+Total_time: 14627.036  -        -         -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:HWOI
+Total_time: 14627.036  -        -         -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:HIOW
+----------------------------------------------------
+data layout:NHWC , kernel layout:HIWO
+----------------------------------------------------
+data layout:NHWC , kernel layout:HOWI
+----------------------------------------------------
+data layout:NHWC , kernel layout:HOIW
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWOH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWHO
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOHW
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOWH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHWO
+Total_time: 14627.036  -        -         -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHOW
+----------------------------------------------------
+data layout:NHWC , kernel layout:OWHI
+----------------------------------------------------
+data layout:NHWC , kernel layout:OWIH
+----------------------------------------------------
+data layout:NHWC , kernel layout:OHIW
+----------------------------------------------------
+data layout:NHWC , kernel layout:OHWI
+Total_time: 14627.036  -        -         -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:OIHW
+----------------------------------------------------
+data layout:NHWC , kernel layout:OIWH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHOW
+----------------------------------------------------
+data layout:NHWC , kernel layout:IHWO
+Total_time: 14627.036  -        -         -       -        -                 
+
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWOH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IWHO
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOWH
+----------------------------------------------------
+data layout:NHWC , kernel layout:IOHW
+----------------------------------------------------
+data layout:NCHW , kernel layout:HWIO
+Total_time: 14627.036  -        -         -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:HWOI
+Total_time: 14627.036  -        -         -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:HIOW
+----------------------------------------------------
+data layout:NCHW , kernel layout:HIWO
+----------------------------------------------------
+data layout:NCHW , kernel layout:HOWI
+----------------------------------------------------
+data layout:NCHW , kernel layout:HOIW
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWOH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWHO
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOHW
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOWH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHWO
+Total_time: 14627.036  -        -         -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHOW
+----------------------------------------------------
+data layout:NCHW , kernel layout:OWHI
+----------------------------------------------------
+data layout:NCHW , kernel layout:OWIH
+----------------------------------------------------
+data layout:NCHW , kernel layout:OHIW
+----------------------------------------------------
+data layout:NCHW , kernel layout:OHWI
+Total_time: 14627.036  -        -         -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:OIHW
+----------------------------------------------------
+data layout:NCHW , kernel layout:OIWH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHOW
+----------------------------------------------------
+data layout:NCHW , kernel layout:IHWO
+Total_time: 14627.036  -        -         -       -        -                 
+
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWOH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IWHO
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOWH
+----------------------------------------------------
+data layout:NCHW , kernel layout:IOHW

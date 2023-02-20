@@ -3,6 +3,9 @@ import pathlib
 import shutil
 import argparse
 
+
+from contextlib import contextmanager, nullcontext
+
 import tvm
 from tvm import relay, transform
 import tvm.contrib.utils
@@ -19,10 +22,11 @@ parser.add_argument("--device", type=str, default=None, choices=[None, "arm_cpu"
 parser.add_argument("--cpu", type=str, default="cortex-m7", choices=[None, "cortex-m0", "cortex-m7"], help="Used to identify which CPU features are available (default: %(default)s)")
 parser.add_argument("--data-layout", type=str, default=None, choices=["NHWC", "NCHW"], help="Transform the data layout in the graph (optional)")
 parser.add_argument(
-    "--kernel-layout", type=str, default="default", choices=["default", "HWOI", "HWIO", "IHWO", "OHWI"], help="Transform the kernel layout in the graph (default: %(default)s)"
+    "--kernel-layout", type=str, default="default", choices=["default", "IOHW", "HWOI", "HWIO", "IHWO", "OHWI", "OIHW"], help="Transform the kernel layout in the graph (default: %(default)s)"
 )
 parser.add_argument("--verbose", action="store_true", help="Show all compilation outputs")
 parser.add_argument("--profile", action="store_true", help="Profile the model execution layer by layer")
+parser.add_argument("--disable-legalize", action="store_true", help="Force int8 data in conv2d and dense layers")
 
 args = parser.parse_args()
 
