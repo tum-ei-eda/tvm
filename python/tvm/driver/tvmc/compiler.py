@@ -338,10 +338,6 @@ def compile_model(
         for partition_function, opts in zip(partition_functions, partition_opts):
             mod = partition_function(mod, params, mod_name=mod_name, **opts)
 
-        for ext in get_extensions():
-            for uma_backend in ext.uma_backends():
-                mod = uma_backend.partition(mod)
-
         if tuning_records and os.path.exists(tuning_records):
             logger.debug("tuning records file provided: %s", tuning_records)
 
