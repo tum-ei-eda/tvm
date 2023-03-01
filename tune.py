@@ -1,15 +1,20 @@
 import os
+import json
+import tarfile
 import pathlib
+import tempfile
 import shutil
 import argparse
+import numpy as np
 
 
 from contextlib import contextmanager, nullcontext
 
 import tvm
-from tvm import relay, transform
+from tvm import relay
 import tvm.contrib.utils
 from tvm.contrib.download import download_testdata
+from tvm import relay, transform
 
 parser = argparse.ArgumentParser(description="TVM Script")
 
@@ -19,17 +24,19 @@ parser.add_argument("model", metavar="MODEL", type=str, choices=MODELS, help="Th
 parser.add_argument("--arch", type=str, default="rv32gcp", choices=["rv32gc", "rv32gcp"], help="The RISC-V architecture used by the compiler (default: %(default)s)")
 parser.add_argument("--abi", type=str, default="ilp32d", choices=["ilp32", "ilp32d"], help="The RISC-V architecture used by the compiler (default: %(default)s)")
 parser.add_argument("--device", type=str, default=None, choices=[None, "arm_cpu"], help="The used target device to determine the TVM schedules (default: %(default)s)")
-parser.add_argument("--cpu", type=str, default="cortex-m7", choices=[None, "cortex-m0", "cortex-m7"], help="Used to identify which CPU features are available (default: %(default)s)")
+parser.add_argument("--cpu", type=str, default=None, choices=[None, "cortex-m0", "cortex-m7"], help="Used to identify which CPU features are available (default: %(default)s)")
 parser.add_argument("--data-layout", type=str, default="NHWC", choices=["NHWC", "NCHW"], help="Transform the data layout in the graph (optional)")
 parser.add_argument(
     "--kernel-layout", type=str, default="default", choices=["default", "IOHW", "HWOI", "HWIO", "IHWO", "OHWI", "OIHW"], help="Transform the kernel layout in the graph (default: %(default)s)"
 )
 parser.add_argument("--verbose", action="store_true", help="Show all compilation outputs")
-parser.add_argument("--profile", action="store_true", help="Profile the model execution layer by layer")
 parser.add_argument("--disable-legalize", action="store_true", help="Force int8 data in conv2d and dense layers")
 parser.add_argument(
-    "--tuning-records", type=str, nargs="?", default=None, const="auto", help="Use tuning records for specified target, if available"
+    "--output", type=str, default="auto", help="Destination for tuning logs"
 )
+parser.add_argument("--append", action="store_true", help="Append existing tuning logs.")
+parser.add_argument("--trials", type=int, default=100, help="Number of tuning iterations per task (default: %(default)s)")
+parser.add_argument("--early-stopping", type=int, default=None, help="Stop tuning if performance doeas not impreove over a certain amount of iterations")
 
 
 args = parser.parse_args()
@@ -132,6 +139,7 @@ if args.data_layout:
         except Exception as err:
             raise RuntimeError("Error converting layout to {0}: {1}".format(":".join([args.data_layout, args.kernel_layout]), str(err)))
 
+
 ######################################################################
 # Now, compile the model for the target:
 
@@ -154,50 +162,19 @@ def OptionallyDisableLegalize(disableLegalize):
         with TempOpAttr("qnn.conv2d", "FTVMQnnLegalize", do_not_legalize) as convCtx:
             yield (denseCtx, convCtx)
 
-if args.tuning_records:
-    if args.tuning_records == "auto":
-        records_path = pathlib.Path.cwd() / "tuning_records" / args.model / f"{device}_{cpu}" / f"{args.data_layout}_{args.kernel_layout}" / "spike" / f"{args.arch}_{args.abi}" / "tuning_records.log"
-
-    else:
-        records_path = args.tuning_records
-    assert os.path.exists(records_path), f"Tuning records file ({records_path}) does not exist!"
+if args.output == "auto":
+    records_path = pathlib.Path.cwd() / "tuning_records" / args.model / f"{device}_{cpu}" / f"{args.data_layout}_{args.kernel_layout}"/ "spike" / f"{args.arch}_{args.abi}" / "tuning_records.log"
 else:
-    records_path = None
+    records_path = args.output
+records_path.parent.mkdir(exist_ok=True, parents=True)
 
-with tvm.autotvm.apply_history_best(records_path):
-    with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):
-        with OptionallyDisableLegalize(args.disable_legalize):
-            module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params, executor=executor)
-            module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params, executor=executor)
-# with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):    module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params)
-
-######################################################################
-# Inspecting the compilation output
-
-c_source_module = module.get_lib().imported_modules[0]
-c_source_code = c_source_module.get_source()
-# print(c_source_code)
-
-
-######################################################################
-# Compiling the generated code
-
-gen_path = pathlib.Path.cwd() / "gen"
-
-if not gen_path.is_dir():
-    gen_path.mkdir()
-
-model_library_format_tar_path = gen_path / "mlf.tar"
-tvm.micro.export_model_library_format(module, model_library_format_tar_path)
-
-# TVM also provides a standard way for embedded platforms to automatically generate a standalone
-# project, compile and flash it to a target, and communicate with it using the standard TVM RPC
-# protocol. The Model Library Format serves as the model input to this process. When embedded
-# platforms provide such an integration, they can be used directly by TVM for both host-driven
-# inference and autotuning . This integration is provided by the
-# `microTVM Project API` <https://github.com/apache/tvm-rfcs/blob/main/rfcs/0008-microtvm-project-api.md>_,
+with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):
+    with OptionallyDisableLegalize(args.disable_legalize):
+        tasks = tvm.autotvm.task.extract_from_program(mod["main"], {}, TARGET)
+assert len(tasks) > 0, "No tunable tasks found"
 
 template_project_path = pathlib.Path.cwd() / "apps" / "microtvm" / "spike"
+
 project_options = {
     "verbose": args.verbose,
     "spike_exe": os.getenv("SPIKE", None),
@@ -209,40 +186,40 @@ project_options = {
     "pk_extra_args": "",
 }
 
-# Create a temporary directory
+module_loader = tvm.micro.AutoTvmModuleLoader(
+    template_project_dir=pathlib.Path(template_project_path),
+    project_options=project_options,
+)
+builder = tvm.autotvm.LocalBuilder(
+    n_parallel=1,
+    build_kwargs={"build_option": {"tir.disable_vectorize": True}},
+    do_fork=False,
+    build_func=tvm.micro.autotvm_build_func,
+    runtime=RUNTIME,
+)
+runner = tvm.autotvm.LocalRunner(number=1, repeat=1, timeout=100, module_loader=module_loader)
 
-generated_project_dir = gen_path / "generated-project"
-if generated_project_dir.is_dir():
-    shutil.rmtree(generated_project_dir)
-generated_project = tvm.micro.generate_project(template_project_path, module, generated_project_dir, project_options)
+measure_option = tvm.autotvm.measure_option(builder=builder, runner=runner)
 
-# Build and flash the project
-generated_project.build()
-generated_project.flash()
+if not args.append:
+    if os.path.exists(records_path):
+        os.remove(records_path)
 
-
-######################################################################
-# Next, establish a session with the simulated device and run the
-# computation. The `with session` line would typically flash an attached
-# microcontroller, but in this tutorial, it simply launches a subprocess
-# to stand in for an attached microcontroller.
-
-with tvm.micro.Session(transport_context_manager=generated_project.transport()) as session:
-    if args.profile:
-        graph_mod = tvm.micro.create_local_debug_executor(
-            module.get_graph_json(), session.get_system_lib(), session.device
-        )
-    else:
-        graph_mod = tvm.micro.create_local_graph_executor(
-            module.get_graph_json(), session.get_system_lib(), session.device
-        )
-
-    # Set the model parameters using the lowered parameters produced by `relay.build`.
-    graph_mod.set_input(**module.get_params())
-
-    # graph_mod.set_input(input_tensor, tvm.nd.array(np.array([0.5], dtype="float32")))
-
-    graph_mod.run()
-
-    tvm_output = graph_mod.get_output(0).numpy()
-    print("result is: " + str(tvm_output))
+num_trials = args.trials
+early_stopping = args.early_stopping
+if not early_stopping:
+    early_stopping = num_trials
+elif early_stopping == "auto":
+    early_stopping = max(10, num_trials // 2)
+for task in tasks:
+    tuner = tvm.autotvm.tuner.GATuner(task)
+    tuner.tune(
+        n_trial=num_trials,
+        measure_option=measure_option,
+        callbacks=[
+            tvm.autotvm.callback.log_to_file(str(records_path)),
+            tvm.autotvm.callback.progress_bar(num_trials, si_prefix="M"),
+        ],
+        si_prefix="M",
+        early_stopping=early_stopping,
+    )
