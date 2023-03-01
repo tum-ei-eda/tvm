@@ -1,20 +1,15 @@
 import os
-import json
-import tarfile
 import pathlib
-import tempfile
 import shutil
 import argparse
-import numpy as np
 
 
 from contextlib import contextmanager, nullcontext
 
 import tvm
-from tvm import relay
+from tvm import relay, transform
 import tvm.contrib.utils
 from tvm.contrib.download import download_testdata
-from tvm import relay, transform
 
 parser = argparse.ArgumentParser(description="TVM Script")
 
@@ -137,7 +132,6 @@ if args.data_layout:
         except Exception as err:
             raise RuntimeError("Error converting layout to {0}: {1}".format(":".join([args.data_layout, args.kernel_layout]), str(err)))
 
-
 ######################################################################
 # Now, compile the model for the target:
 
@@ -173,6 +167,7 @@ else:
 with tvm.autotvm.apply_history_best(records_path):
     with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):
         with OptionallyDisableLegalize(args.disable_legalize):
+            module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params, executor=executor)
             module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params, executor=executor)
 # with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=[]):    module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params)
 
