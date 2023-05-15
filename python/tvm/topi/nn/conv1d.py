@@ -16,6 +16,11 @@
 # under the License.
 # pylint: disable=invalid-name, unused-variable, unused-argument
 """1D convolution operators."""
+import tvm
+from tvm import te
+from .pad import pad
+from ..utils import simplify
+from .utils import get_pad_tuple1d
 from .conv2d import conv
 
 
