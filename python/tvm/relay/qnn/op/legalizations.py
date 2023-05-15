@@ -626,6 +626,18 @@ def _qnn_conv2d_legalize_hexagon(attrs, inputs, types):
 
     return None
 
+#######################
+# Pulp Legalizations
+#######################
+
+@qnn_conv2d_legalize.register(["pulp"])
+def _qnn_conv2d_legalize_pulp(attrs, inputs, types):
+    return None
+
+
+@qnn_dense_legalize.register(["pulp"])
+def _qnn_dense_legalize_pulp(attrs, inputs, types):
+    return None
 
 @qnn_dense_legalize.register("hexagon")
 def _qnn_dense_legalize_hexagon(attrs, inputs, types):
