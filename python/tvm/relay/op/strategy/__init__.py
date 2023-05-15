@@ -28,5 +28,6 @@ from . import mali
 from . import bifrost
 from . import rocm
 from . import intel_graphics
+from . import pulp
 from . import hexagon
 from . import adreno
