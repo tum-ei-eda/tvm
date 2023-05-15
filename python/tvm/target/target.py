@@ -449,6 +449,7 @@ MICRO_SUPPORTED_MODELS = {
     "esp32": [],
     "imxrt10xx": ["-mcpu=cortex-m7"],
     "mps2_an521": ["-mcpu=cortex-m33"],
+    "nrf52832": ["-mcpu=cortex-m4"],
     "mps3_an547": ["-mcpu=cortex-m55"],
     "nrf52840": ["-mcpu=cortex-m4+nodsp"],
     "nrf5340dk": ["-mcpu=cortex-m33"],
@@ -457,6 +458,7 @@ MICRO_SUPPORTED_MODELS = {
     "stm32f746xx": ["-mcpu=cortex-m7", "-march=armv7e-m"],
     "stm32h7xx": ["-mcpu=cortex-m7"],
     "stm32l4r5zi": ["-mcpu=cortex-m4"],
+    "stm32f4xx": ["-mcpu=cortex-m4", "-march=armv7e-m"],
     "stm32u5xx": ["-mcpu=cortex-m33"],
     "zynq_mp_r5": ["-mcpu=cortex-r5"],
 }
