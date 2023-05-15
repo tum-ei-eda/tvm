@@ -63,6 +63,7 @@ from . import image
 from . import sparse
 from . import hls
 from . import random
+from . import pulp
 from . import hexagon
 from . import adreno
 
