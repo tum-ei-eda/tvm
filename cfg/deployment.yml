@@ -1,0 +1,48 @@
+---
+configs:
+host:
+  targets:
+    - kind: llvm
+micro:
+  output_format: mlf
+  runtime:
+    kind: crt
+  executor:
+    kind: aot
+    unpacked_api: true
+  pass-config:
+    tir.disable_vectorize: 1
+  trials: 10
+  targets:
+    - kind: c
+cmsisnn: # cmsisnn + cmsisnn
+  output_format: mlf
+  runtime:
+    kind: crt
+  executor:
+    kind: aot
+    unpacked_api: true
+  pass-config:
+    tir.disable_vectorize: 1
+  trials: 10
+  targets:
+  targets:
+    - kind: cmsisnn
+      mattr: "+fp"
+    - kind: c
+      mcpu: cortex-m55
+ethosu: # corstone + ethosu
+  output_format: mlf
+  runtime:
+    kind: crt
+  executor:
+    kind: aot
+    unpacked_api: true
+  trials: 10
+  targets:
+  targets:
+    - kind: ethos-u
+      accelerator-config: "ethos-u55-32"
+    - kind: cmsisnn
+      mattr: "+fp"
+    - kind: llvm

@@ -1,0 +1,56 @@
+---
+platforms:
+  generic-rv32:
+    cores: 1
+    caches:
+      l1:
+        cores: [0]
+        size_bytes: 1024
+    simd:
+      lanes: [1]
+      native_vector_length_bits: 32
+    fpu:
+      costs: TODO
+    memory:
+      - name: ROM
+        access: "r"
+        costs: TODO
+      - name: RAM
+        access: "rw"
+        costs: TODO
+  generic-rv64:
+    cores: 1
+    caches:
+      l1:
+        cores: [0]
+        size_bytes: 1024
+    simd:
+      lanes: [1]
+      native_vector_length_bits: 64
+    fpu:
+      costs: TODO
+    memory:
+      - name: ROM
+        access: "r"
+        costs: TODO
+      - name: RAM
+        access: "rw"
+        costs: TODO
+  cv32e40p:
+    cores: 1
+    caches:
+      l1:
+        cores: [0]
+        size_bytes: 1024
+    simd:
+      lanes: [4,2]
+      native_vector_length_bits: 32
+    fpu:
+      costs: TODO
+    memory:
+      - name: ROM
+        access: "r"
+        costs: TODO
+      - name: RAM
+        access: "rw"
+        costs: TODO

@@ -1,0 +1,24 @@
+---
+tflite:
+  operators:
+    - name:
+onnx:
+  operators:
+    - name:
+relay:
+  operators:
+    - name: nn.conv2d
+      configs:
+        - inputs:
+            - name:
+              shape:
+              type:
+          output:
+            - name:
+              shape:
+              type:
+          properties:
+            - name: kernel_size
+              value: [10, 10]
+          count: 5
+          flops: 11111

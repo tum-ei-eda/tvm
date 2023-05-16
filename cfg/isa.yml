@@ -1,0 +1,12 @@
+---
+cores:
+  - name: RV32IMACFD
+    state:
+      - name: XLEN
+        value: 32
+      - name: FLEN
+        value: 64
+    sets:
+      - name: RV32I
+      - name: RVM
+      - ...
