@@ -1,0 +1,1438 @@
+diff --git a/python/tvm/relay/op/nn/_nn.py b/python/tvm/relay/op/nn/_nn.py
+index b93285aed..f572c9f7d 100644
+--- a/python/tvm/relay/op/nn/_nn.py
++++ b/python/tvm/relay/op/nn/_nn.py
+@@ -19,7 +19,7 @@
+ from __future__ import absolute_import
+ import re
+
+-from tvm import relay, topi
++from tvm import relay, topi, target
+ from tvm.runtime import convert
+ from tvm.te.hybrid import script
+ from tvm.topi.utils import get_const_tuple
+@@ -203,6 +203,27 @@ reg.register_strategy("nn.sparse_conv2d", strategy.sparse_conv2d_strategy)
+ reg.register_strategy("nn.conv1d", strategy.conv1d_strategy)
+
+
++#@reg.register_legalize("nn.conv1d")
++#def legalize_conv1d(attrs, inputs, types):
++#    """Legalize conv1d op.
++#
++#   Parameters
++#    ----------
++#    attrs : tvm.ir.Attrs
++#        Attributes of current convolution
++#    inputs : list of tvm.relay.Expr
++#        The args of the Relay expr to be legalized
++#    types : list of types
++#        List of input and output types
++#
++#    Returns
++#    -------
++#    result : tvm.relay.Expr
++#        The legalized expr
++#    """
++#    return topi.nn.conv1d_legalize(attrs, inputs, types)
++
++
+ # conv2d
+ reg.register_strategy("nn.conv2d", strategy.conv2d_strategy)
+
+@@ -234,6 +255,41 @@ def legalize_conv2d(attrs, inputs, types):
+     return topi.nn.conv2d_legalize(attrs, inputs, types)
+
+
++@reg.register_convert_op_layout("nn.conv1d")
++def convert_conv1d(attrs, inputs, tinfos, desired_layouts):
++    # pylint: disable=import-outside-toplevel
++    from tvm import relay
++
++    data, weight = inputs
++
++    # First check if there is a LayoutConfig scope, and if so, whether
++    # it indicates we should ignore this layer or not.
++    layout_config = LayoutConfig.current
++    if layout_config is not None:
++        skip_layer = layout_config.check_skip()
++        if skip_layer:
++            return relay.nn.conv1d(data, weight, **attrs)
++
++    new_attrs = dict(attrs)
++
++    new_attrs = dict(attrs)
++    assert len(desired_layouts) == 2, "A desired layout is expected for both of nn.conv1d's inputs"
++    desired_data_layout, desired_kernel_layout = map(str, desired_layouts)
++    assert desired_data_layout != "default", "Data layout cannot be default"
++    new_attrs["data_layout"] = desired_data_layout
++    new_attrs["kernel_layout"] = desired_kernel_layout
++
++    if desired_kernel_layout == "default":
++        if desired_data_layout == "NCW":
++            new_attrs["kernel_layout"] = "OIW"
++        elif desired_data_layout == "NWC":
++            new_attrs["kernel_layout"] = "WIO"
++        else:
++            raise ValueError("Layout %s is not yet supported." % desired_data_layout)
++
++    return relay.nn.conv1d(data, weight, **new_attrs)
++
++
+ @reg.register_convert_op_layout("nn.conv2d")
+ def convert_conv2d(attrs, inputs, tinfos, desired_layouts):
+     """Convert Layout pass registration for conv2d op.
+@@ -257,6 +313,8 @@ def convert_conv2d(attrs, inputs, tinfos, desired_layouts):
+     """
+     data, weight = inputs
+
++    current_target = target.Target.current(allow_none = True)
++
+     # First check if there is a LayoutConfig scope, and if so, whether
+     # it indicates we should ignore this layer or not.
+     layout_config = LayoutConfig.current
+@@ -293,7 +351,11 @@ def convert_conv2d(attrs, inputs, tinfos, desired_layouts):
+         ):
+             new_attrs["kernel_layout"] = "HWOI"
+         else:
+-            new_attrs["kernel_layout"] = "HWIO"
++
++            if current_target and "pulp" in current_target.keys and attrs["groups"] == 1:
++                new_attrs["kernel_layout"] = "OHWI"
++            else:
++                new_attrs["kernel_layout"] = "HWIO"
+         return relay.nn.conv2d(data, weight, **new_attrs)
+     elif desired_data_layout == "HWNC":
+         new_attrs["kernel_layout"] = "HWOI"
+diff --git a/python/tvm/relay/op/strategy/__init__.py b/python/tvm/relay/op/strategy/__init__.py
+index 1be5425e7..2249df06d 100644
+--- a/python/tvm/relay/op/strategy/__init__.py
++++ b/python/tvm/relay/op/strategy/__init__.py
+@@ -28,5 +28,6 @@ from . import mali
+ from . import bifrost
+ from . import rocm
+ from . import intel_graphics
++from . import pulp
+ from . import hexagon
+ from . import adreno
+diff --git a/python/tvm/relay/op/strategy/pulp.py b/python/tvm/relay/op/strategy/pulp.py
+new file mode 100644
+index 000000000..c271fb434
+--- /dev/null
++++ b/python/tvm/relay/op/strategy/pulp.py
+@@ -0,0 +1,136 @@
++
++from .generic import *
++from .. import op as _op
++import logging
++
++logger = logging.getLogger(__name__)
++
++@conv1d_strategy.register("pulp")
++def conv1d_strategy(attrs, inputs, out_type, target):
++    """conv1d pulp strategy"""
++    layout = attrs.data_layout
++    kernel_layout = attrs.kernel_layout
++    dilation = get_const_tuple(attrs.dilation)
++    if dilation[0] < 1:
++        raise ValueError("dilation should be a positive value")
++    strategy = _op.OpStrategy()
++    if layout == "NCW":
++        strategy.add_implementation(
++            wrap_compute_conv1d(topi.pulp.conv1d_ncw),
++            wrap_topi_schedule(topi.pulp.schedule_conv1d_ncw),
++            name="conv1d_ncw.pulp"
++        )
++    elif layout == "NWC":
++        if kernel_layout == "WIO":
++            strategy.add_implementation(
++                wrap_compute_conv1d(topi.pulp.conv1d_nwc),
++                wrap_topi_schedule(topi.pulp.schedule_conv1d_nwc),
++                name="conv1d_nwc.pulp"
++            )
++        elif kernel_layout == "OWI":
++            strategy.add_implementation(
++                wrap_compute_conv1d(topi.pulp.conv1d_nwc_owi),
++                wrap_topi_schedule(topi.pulp.schedule_conv1d_nwc_owi),
++                name="conv1d_nwc_owi.pulp"
++            )
++    else:
++        raise ValueError("Unsupported conv1d layout {}".format(layout))
++    return strategy
++
++
++
++
++@conv2d_strategy.register("pulp")
++def conv2d_strategy(attrs, inputs, out_type, target):
++    """conv2d pulp strategy"""
++
++    logger.info("Registering strategy for conv2d")
++    logger.info("attrs:")
++    for k in attrs.keys():
++        logger.info("  %s: %s", str(k), str(attrs[k]))
++    logger.info("inputs: %s", str(inputs))
++    logger.info("out_type: %s", str(out_type))
++    logger.info("target: %s", str(target))
++
++    strategy = _op.OpStrategy()
++    data, kernel = inputs
++    dilation = get_const_tuple(attrs.dilation)
++    groups = attrs.groups
++    layout = attrs.data_layout
++    kernel_layout = attrs.kernel_layout
++    (dilation_h, dilation_w) = dilation
++    if dilation_h < 1 or dilation_w < 1:
++        raise ValueError("dilation should be positive value")
++
++    if groups == 1:
++        if layout == "NCHW":
++            assert kernel_layout == "OIHW"
++            strategy.add_implementation(
++                wrap_compute_conv2d(topi.pulp.conv2d_nchw),
++                wrap_topi_schedule(topi.pulp.schedule_conv2d_nchw),
++                name="conv2d_nchw.pulp",
++            )
++        elif layout == "NHWC":
++            assert kernel_layout == "HWIO" or kernel_layout == "OHWI"
++            if kernel_layout == "HWIO":
++                strategy.add_implementation(
++                    wrap_compute_conv2d(topi.pulp.conv2d_nhwc),
++                    wrap_topi_schedule(topi.pulp.schedule_conv2d_nhwc),
++                    name="conv2d_nhwc.pulp",
++                )
++            else:
++                strategy.add_implementation(
++                    wrap_compute_conv2d(topi.pulp.conv2d_nhwc_ohwi),
++                    wrap_topi_schedule(topi.pulp.schedule_conv2d_nhwc_ohwi),
++                    name="conv2d_nhwc_ohwi.pulp"
++                )
++        elif layout == "HWCN":
++            assert kernel_layout == "HWIO"
++            strategy.add_implementation(
++                wrap_compute_conv2d(topi.nn.conv2d_hwcn),
++                wrap_topi_schedule(topi.generic.schedule_conv2d_hwcn),
++                name="conv2d_hwcn.generic",
++            )
++        else:
++            raise RuntimeError("Unsupported conv2d layout {}".format(layout))
++    elif is_depthwise_conv2d(data.shape, layout, kernel.shape, kernel_layout, groups):
++        if layout == "NCHW":
++            assert kernel_layout == "OIHW"
++            strategy.add_implementation(
++                wrap_compute_conv2d(topi.nn.depthwise_conv2d_nchw),
++                wrap_topi_schedule(topi.generic.schedule_depthwise_conv2d_nchw),
++                name="depthwise_conv2d_nchw.generic",
++            )
++        elif layout == "NHWC":
++            assert kernel_layout == "HWOI"
++            strategy.add_implementation(
++                wrap_compute_conv2d(topi.nn.depthwise_conv2d_nhwc),
++                wrap_topi_schedule(topi.generic.schedule_depthwise_conv2d_nhwc),
++                name="depthwise_conv2d_nhwc.generic",
++            )
++        else:
++            raise RuntimeError("Unsupported depthwise_conv2d layout {}".format(layout))
++    else:  # group_conv2d
++        if layout == "NCHW":
++            assert kernel_layout == "OIHW"
++            strategy.add_implementation(
++                wrap_compute_conv2d(topi.nn.group_conv2d_nchw, has_groups=True),
++                wrap_topi_schedule(topi.generic.schedule_group_conv2d_nchw),
++                name="group_conv2d_nchw.generic",
++            )
++        elif layout == "NHWC":
++            assert kernel_layout == "HWIO"
++            strategy.add_implementation(
++                wrap_compute_conv2d(topi.nn.group_conv2d_nhwc, has_groups=True),
++                wrap_topi_schedule(topi.generic.schedule_group_conv2d_nhwc),
++                name="group_conv2d_nhwc.generic",
++            )
++        else:
++            raise RuntimeError("Unsupported group_conv2d layout {}".format(layout))
++    return strategy
++
++@schedule_pool.register("pulp")
++def schedule_pool_pulp(attrs, outs, target):
++    """Schedule pooling ops"""
++    with target:
++        return topi.pulp.schedule_pool(outs, attrs.layout)
+\ No newline at end of file
+diff --git a/python/tvm/relay/qnn/op/layout_conversions.py b/python/tvm/relay/qnn/op/layout_conversions.py
+index 24c787e0a..b33ff6557 100644
+--- a/python/tvm/relay/qnn/op/layout_conversions.py
++++ b/python/tvm/relay/qnn/op/layout_conversions.py
+@@ -18,6 +18,8 @@
+ """Convert layout related registration"""
+ from __future__ import absolute_import
+
++import tvm
++
+ from tvm.relay.op import op as reg
+
+ from ...op.strategy.generic import is_depthwise_conv2d
+@@ -47,6 +49,8 @@ def convert_qnn_conv2d(attrs, inputs, tinfos, desired_layouts):
+     # pylint: disable=import-outside-toplevel
+     from tvm import relay
+
++    current_target = tvm.target.Target.current(allow_none = True)
++
+     assert len(desired_layouts) == 2, "A desired layout is expected for both of qnn.conv2d's inputs"
+     desired_data_layout, desired_kernel_layout = map(str, desired_layouts)
+     assert desired_data_layout != "default", "Data layout cannot be default"
+@@ -74,7 +78,10 @@ def convert_qnn_conv2d(attrs, inputs, tinfos, desired_layouts):
+         ):
+             new_attrs["kernel_layout"] = "HWOI"
+         else:
+-            new_attrs["kernel_layout"] = "HWIO"
++            if current_target and "pulp" in current_target.keys and attrs["groups"] == 1:
++                new_attrs["kernel_layout"] = "OHWI"
++            else:
++                new_attrs["kernel_layout"] = "HWIO"
+         return relay.qnn.op.conv2d(*inputs, **new_attrs)
+
+     raise ValueError("Layout %s is not yet supported" % desired_data_layout)
+diff --git a/python/tvm/relay/qnn/op/legalizations.py b/python/tvm/relay/qnn/op/legalizations.py
+index 8dc54a19b..995a7e742 100644
+--- a/python/tvm/relay/qnn/op/legalizations.py
++++ b/python/tvm/relay/qnn/op/legalizations.py
+@@ -547,7 +547,6 @@ def _qnn_dense_legalize_cuda(attrs, inputs, types):
+         return helper_change_dtypes_to_int8(attrs, inputs, types, relay.qnn.op.dense)
+     return None
+
+-
+ ########################
+ # Hexagon legalizations.
+ ########################
+@@ -626,6 +625,18 @@ def _qnn_conv2d_legalize_hexagon(attrs, inputs, types):
+
+     return None
+
++#######################
++# Pulp Legalizations
++#######################
++
++@qnn_conv2d_legalize.register(["pulp"])
++def _qnn_conv2d_legalize_pulp(attrs, inputs, types):
++    return None
++
++
++@qnn_dense_legalize.register(["pulp"])
++def _qnn_dense_legalize_pulp(attrs, inputs, types):
++    return None
+
+ @qnn_dense_legalize.register("hexagon")
+ def _qnn_dense_legalize_hexagon(attrs, inputs, types):
+diff --git a/python/tvm/target/target.py b/python/tvm/target/target.py
+index 06e177696..8b4327409 100644
+--- a/python/tvm/target/target.py
++++ b/python/tvm/target/target.py
+@@ -449,6 +449,7 @@ MICRO_SUPPORTED_MODELS = {
+     "esp32": [],
+     "imxrt10xx": ["-mcpu=cortex-m7"],
+     "mps2_an521": ["-mcpu=cortex-m33"],
++    "nrf52832": ["-mcpu=cortex-m4"],
+     "mps3_an547": ["-mcpu=cortex-m55"],
+     "nrf52840": ["-mcpu=cortex-m4+nodsp"],
+     "nrf5340dk": ["-mcpu=cortex-m33"],
+@@ -457,6 +458,7 @@ MICRO_SUPPORTED_MODELS = {
+     "stm32f746xx": ["-mcpu=cortex-m7", "-march=armv7e-m"],
+     "stm32h7xx": ["-mcpu=cortex-m7"],
+     "stm32l4r5zi": ["-mcpu=cortex-m4"],
++    "stm32f4xx": ["-mcpu=cortex-m4", "-march=armv7e-m"],
+     "stm32u5xx": ["-mcpu=cortex-m33"],
+     "zynq_mp_r5": ["-mcpu=cortex-r5"],
+ }
+diff --git a/python/tvm/topi/__init__.py b/python/tvm/topi/__init__.py
+index fc316fd19..37293699b 100644
+--- a/python/tvm/topi/__init__.py
++++ b/python/tvm/topi/__init__.py
+@@ -63,6 +63,7 @@ from . import image
+ from . import sparse
+ from . import hls
+ from . import random
++from . import pulp
+ from . import hexagon
+ from . import adreno
+
+diff --git a/python/tvm/topi/nn/conv1d.py b/python/tvm/topi/nn/conv1d.py
+index ee388b429..967a78e70 100644
+--- a/python/tvm/topi/nn/conv1d.py
++++ b/python/tvm/topi/nn/conv1d.py
+@@ -16,6 +16,11 @@
+ # under the License.
+ # pylint: disable=invalid-name, unused-variable, unused-argument
+ """1D convolution operators."""
++import tvm
++from tvm import te
++from .pad import pad
++from ..utils import simplify
++from .utils import get_pad_tuple1d
+ from .conv2d import conv
+
+
+diff --git a/python/tvm/topi/nn/conv2d.py b/python/tvm/topi/nn/conv2d.py
+index a3afc2590..6b7c1f696 100644
+--- a/python/tvm/topi/nn/conv2d.py
++++ b/python/tvm/topi/nn/conv2d.py
+@@ -339,6 +339,105 @@ def conv2d_nhwc(
+     )
+
+
++def conv2d_nhwc_ohwi(
++    Input,
++    Filter,
++    stride,
++    padding,
++    dilation,
++    out_dtype="float32",
++    auto_scheduler_rewritten_layout="",
++):
++    """Convolution operator in NHWC layout.
++
++    Parameters
++    ----------
++    Input : tvm.te.Tensor
++        4-D with shape [batch, in_height, in_width, in_channel]
++
++    Filter : tvm.te.Tensor
++        4-D with shape [num_filter, filter_height, filter_width, in_channel]
++
++    stride : int or a list/tuple of two ints
++        Stride size, or [stride_height, stride_width]
++
++    padding : int or a list/tuple of 2 or 4 ints
++        padding size, or
++        [pad_height, pad_width] for 2 ints, or
++        [pad_top, pad_left, pad_bottom, pad_right] for 4 ints
++
++    dilation: int or a list/tuple of two ints
++        dilation size, or [dilation_height, dilation_width]
++
++    out_dtype: str = "float32",
++        The type of output tensor
++
++    auto_scheduler_rewritten_layout: str = ""
++        The layout after auto-scheduler's layout rewrite pass.
++
++    Returns
++    -------
++    output : tvm.te.Tensor
++        4-D with shape [batch, out_height, out_width, out_channel]
++    """
++    assert isinstance(stride, int) or len(stride) == 2
++    assert isinstance(dilation, int) or len(dilation) == 2
++
++    if isinstance(stride, int):
++        stride_h = stride_w = stride
++    else:
++        stride_h, stride_w = stride
++
++    if isinstance(dilation, int):
++        dilation_h = dilation_w = dilation
++    else:
++        dilation_h, dilation_w = dilation
++
++    if auto_scheduler_rewritten_layout:
++        # Infer shape for the rewritten layout
++        num_filter, kernel_h, kernel_w, channel = auto_scheduler.get_shape_from_rewritten_layout(
++            auto_scheduler_rewritten_layout, ["ff", "ry", "rx", "rc"]
++        )
++        auto_scheduler.remove_index_check(Filter)
++    else:
++        num_filter, kernel_h, kernel_w, channel = Filter.shape
++
++    batch, in_height, in_width, in_channel = Input.shape
++    # compute the output shape
++    dilated_kernel_h = (kernel_h - 1) * dilation_h + 1
++    dilated_kernel_w = (kernel_w - 1) * dilation_w + 1
++    pad_top, pad_left, pad_down, pad_right = get_pad_tuple(
++        padding, (dilated_kernel_h, dilated_kernel_w)
++    )
++    out_channel = num_filter
++    out_height = simplify((in_height - dilated_kernel_h + pad_top + pad_down) // stride_h + 1)
++    out_width = simplify((in_width - dilated_kernel_w + pad_left + pad_right) // stride_w + 1)
++    pad_before = [0, pad_top, pad_left, 0]
++    pad_after = [0, pad_down, pad_right, 0]
++    PaddedInput = pad(Input, pad_before, pad_after, name="PaddedInput")
++    rc = te.reduce_axis((0, in_channel), name="rc")
++    ry = te.reduce_axis((0, kernel_h), name="ry")
++    rx = te.reduce_axis((0, kernel_w), name="rx")
++    Output = te.compute(
++        (batch, out_height, out_width, out_channel),
++        lambda nn, yy, xx, ff: te.sum(
++            PaddedInput[
++                nn, yy * stride_h + ry * dilation_h, xx * stride_w + rx * dilation_w, rc
++            ].astype(out_dtype)
++            * Filter[ff, ry, rx, rc].astype(out_dtype),
++            axis=[ry, rx, rc],
++        ),
++        name="Conv2dOutput",
++        tag="conv2d_nhwc_ohwi",
++        attrs={"layout_free_placeholders": [Filter]},
++    )
++
++    if auto_scheduler_rewritten_layout:
++        Output = auto_scheduler.rewrite_compute_body(Output, auto_scheduler_rewritten_layout)
++
++    return Output
++
++
+ def conv2d_NCHWc(data, kernel, stride, padding, dilation, layout, out_layout, out_dtype="float32"):
+     """Conv2D operator for nChw[x]c layout.
+
+diff --git a/python/tvm/topi/pulp/__init__.py b/python/tvm/topi/pulp/__init__.py
+new file mode 100644
+index 000000000..4f446c513
+--- /dev/null
++++ b/python/tvm/topi/pulp/__init__.py
+@@ -0,0 +1,2 @@
++
++from .nn import *
+diff --git a/python/tvm/topi/pulp/nn.py b/python/tvm/topi/pulp/nn.py
+new file mode 100644
+index 000000000..9c6cd6a11
+--- /dev/null
++++ b/python/tvm/topi/pulp/nn.py
+@@ -0,0 +1,892 @@
++from __future__ import absolute_import as _abs
++import logging
++from os import wait
++from tvm import te, tir, autotvm
++from tvm.target import Target
++import re
++from ..nn.pad import pad
++from ..utils import simplify, get_const_tuple, traverse_inline
++from ..nn.utils import get_pad_tuple1d, get_pad_tuple
++from .. import tag
++
++logger = logging.getLogger(__name__)
++
++def sdot_available() -> bool:
++    """Checks if pulp sdot intrinsics are available
++
++    Returns:
++        bool: True if available else otherwise
++    """
++
++    from tvm.target import codegen
++    llvm_id = codegen.llvm_lookup_intrinsic_id("llvm.riscv.pulp.sdotsp4")
++    if llvm_id == 0:
++        logger.warning("llvm version does not support llvm intrinsics")
++
++    return llvm_id != 0
++
++
++def sdotp(data_dtype, kernel_dtype, out_dtype, vec_length, data_is_last_axis=True, kernel_is_last_axis=True, dilation=1):
++
++    flip = False
++    if data_dtype.startswith("u"):
++        if kernel_dtype.startswith("u"):
++            intrinsic_name = "llvm.riscv.pulp.sdotup"
++        else:
++            intrinsic_name = "llvm.riscv.pulp.sdotusp"
++    else:
++        if kernel_dtype.startswith("u"):
++            intrinsic_name = "llvm.riscv.pulp.sdotusp"
++            flip = True
++        else:
++            intrinsic_name = "llvm.riscv.pulp.sdotsp"
++
++    intrinsic_name += str(vec_length)
++
++    a_size = (vec_length - 1) * dilation + 1
++    a_shape = (a_size,) if data_is_last_axis else (a_size, 1)
++    a = te.placeholder(a_shape, data_dtype, "a")
++
++    b_shape = (vec_length,) if kernel_is_last_axis else (vec_length, 1)
++    b = te.placeholder(b_shape, kernel_dtype, "b")
++
++    k = te.reduce_axis((0, vec_length), "k")
++
++    ak = a[k * dilation] if data_is_last_axis else a[k * dilation, 0]
++    ak = ak.astype(out_dtype)
++
++    bk = b[k] if kernel_is_last_axis else b[k, 0]
++    bk = bk.astype(out_dtype)
++
++    c = te.compute((1,), lambda _: te.sum(ak * bk, [k]), "c")
++
++    def intrin_func(ins, outs):
++        aa, bb = ins
++        cc,    = outs
++
++        #no easier way to build a vector?
++        if data_is_last_axis and dilation == 1:
++            aaval = aa.vload([0], data_dtype + "x" + str(vec_length))
++        else:
++            aaval = tir.Load(data_dtype + "x" + str(vec_length), aa.data,
++                             tir.Ramp(aa.elem_offset, dilation * aa.strides[0], vec_length))
++
++        if kernel_is_last_axis:
++            bbval = bb.vload([0], kernel_dtype + "x" + str(vec_length))
++        else:
++            bbval = tir.Load(kernel_dtype + "x" + str(vec_length), bb.data,
++                             tir.Ramp(bb.elem_offset, bb.strides[0], vec_length))
++
++        if flip:
++            aaval, bbval = bbval, aaval
++
++        ccval = cc.vload([0]).astype("int32")
++
++        call = tir.call_llvm_pure_intrin(
++            "int32",
++            intrinsic_name,
++            3,
++            aaval, bbval, ccval
++        ).astype(out_dtype)
++
++        body = cc.vstore([0], call)
++
++        reduce_init = cc.vstore([0], tir.IntImm(out_dtype, 0))
++        return None, reduce_init, body
++
++    Ab = tir.decl_buffer(a.shape, a.dtype, name="A",
++                         offset_factor=1, strides=[1] if data_is_last_axis else [te.var("batch"), 1], data_alignment=1)
++    Bb = tir.decl_buffer(b.shape, b.dtype, name="B",
++                         offset_factor=1, strides=[1] if kernel_is_last_axis else [te.var("out_channels"), 1], data_alignment=1)
++    Cb = tir.decl_buffer(c.shape, c.dtype, name="C",
++                         offset_factor=1, strides=[1], data_alignment=1)
++
++    return te.decl_tensor_intrin(c.op, intrin_func, binds={a: Ab, b: Bb, c: Cb})
++
++
++def get_vec_length(out, data, weight):
++    tgt = Target.current()
++    if tgt.kind.name == "llvm" and "+xpulpv" in tgt.mattr and re.match("u?int(8|16|32)", out):
++        if re.match("u?int8", data) and re.match("u?int8", weight):
++            return 4
++        elif re.match("u?int16", data) and re.match("u?int16", weight):
++            return 2
++
++    return 1
++
++
++@autotvm.register_topi_schedule("conv1d_ncw.pulp")
++def schedule_conv1d_ncw(cfg, outs):
++    outs = [outs] if isinstance(outs, te.tensor.Tensor) else outs
++    s = te.create_schedule([x.op for x in outs])
++
++    def _callback(op):
++        if op.tag == "conv1d_ncw":
++            data, weight = op.input_tensors
++            out = op.output(0)
++            n, c, w = op.axis
++            rc, rw = op.reduce_axis
++
++            workload = op.attrs["workload"]
++            dilation = get_const_tuple(workload[5])
++
++            s[data.op.input_tensors[0]].compute_inline()
++            s[data].compute_at(s[out], rw)
++            s[weight].compute_at(s[out], rw)
++
++            vec_length = get_vec_length(out.dtype, data.dtype, weight.dtype)
++
++            if vec_length != 1:
++                rwo, rwi = s[out].split(rw, vec_length)
++                t = sdotp(data.dtype, weight.dtype, out.dtype, vec_length, dilation=dilation[0])
++                s[out].tensorize(rwi, t)
++
++                cfg.define_split("tile_w", w, num_outputs=2, policy="candidate", candidate=[[-1, 1],[-1, 2],[-1, 4],[-1, 8]])
++                wo, wi = cfg["tile_w"].apply(s, out, w)
++                cfg.define_split("tile_rwo", rwo, num_outputs=2, policy="candidate", candidate=[[-1, 1],[-1, 2],[-1, 4],[-1, 8]])
++                rwoo, rwoi = cfg["tile_rwo"].apply(s, out, rwo)
++
++                s[out].reorder(n, wo, rwoo, c, rc, wi, rwoi, rwi)
++
++                s[data].compute_at(s[out], rwoi)
++                s[weight].compute_at(s[out], rwoi)
++
++    traverse_inline(s, outs[0].op, _callback)
++
++    return s
++
++
++@autotvm.register_topi_compute("conv1d_ncw.pulp")
++def conv1d_ncw(cfg, data, kernel, strides=1, padding="VALID", dilation=1, out_dtype=None):
++    """1D convolution forward operator for NCW layout.
++
++    Parameters
++    ----------
++    data : tvm.te.Tensor
++        3-D with shape [batch, in_channel, in_width]
++
++    kernel : tvm.te.Tensor
++        3-D with shape [num_filter, in_channel, filter_size]
++
++    strides : int or tuple
++        The spatial stride along width
++
++    padding : int, tuple, or str
++        Padding size can be an integer for equal padding,
++        a tuple of (left, right) or a string in ['VALID', 'SAME'].
++
++    dilation : int or tuple
++        Dilation rate if convolution should be dilated.
++
++    out_dtype : str
++        The output data type. If None then output is same type as input.
++    """
++    if out_dtype is None:
++        out_dtype = data.dtype
++    if isinstance(strides, (tuple, list)):
++        strides = strides[0]
++    if isinstance(dilation, (tuple, list)):
++        dilation = dilation[0]
++
++    batch, in_channels, data_width = data.shape
++    out_channels, _, kernel_size = kernel.shape
++
++
++    # Compute the output shape
++    dilated_kernel_size = (kernel_size - 1) * dilation + 1
++    pad_left, pad_right = get_pad_tuple1d(padding, (dilated_kernel_size,))
++    out_channels = simplify(out_channels)
++    out_width = simplify((data_width - dilated_kernel_size + pad_left + pad_right) // strides + 1)
++
++    # Compute flop
++    cfg.add_flop(2 * batch * out_channels * out_width * kernel_size * in_channels)
++
++    # Apply padding
++    pad_before = [0, 0, pad_left]
++    pad_after = [0, 0, pad_right]
++    temp = pad(data, pad_before, pad_after, name="pad_temp")
++
++    # Apply padding for tensorization
++    pad_tensorize = -kernel_size % get_vec_length(out_dtype, data.dtype, kernel.dtype)
++    temp = pad(temp, (0, 0, 0), (0, 0, pad_tensorize * dilation))
++    kernel = pad(kernel, (0, 0, 0), (0, 0, pad_tensorize))
++
++    # Compute graph
++    rc = te.reduce_axis((0, in_channels), name="rc")
++    rw = te.reduce_axis((0, kernel_size + pad_tensorize), name="rw")
++
++    return te.compute(
++        (batch, out_channels, out_width),
++        lambda b, c, w: te.sum(
++            temp[b, rc, w * strides + rw * dilation].astype(out_dtype)
++            * kernel[c, rc, rw].astype(out_dtype),
++            axis=[rc, rw],
++        ),
++        tag="conv1d_ncw",
++    )
++
++
++@autotvm.register_topi_schedule("conv1d_nwc.pulp")
++def schedule_conv1d_nwc(cfg, outs):
++    outs = [outs] if isinstance(outs, te.tensor.Tensor) else outs
++    s = te.create_schedule([x.op for x in outs])
++
++    def _callback(op):
++        if op.tag == "conv1d_nwc":
++            data, weight = op.input_tensors
++            out = op.output(0)
++            n, w, c = op.axis
++            rw, rc = op.reduce_axis
++
++            s[data.op.input_tensors[0]].compute_inline()
++            s[data].compute_at(s[out], rw)
++            s[weight].compute_at(s[out], rw)
++
++            vec_length = get_vec_length(out.dtype, data.dtype, weight.dtype)
++
++            if vec_length != 1:
++                t = sdotp(data.dtype, weight.dtype, out.dtype, vec_length, kernel_is_last_axis=False)
++                rco, rci = s[out].split(rc, vec_length)
++                s[out].tensorize(rci, t)
++
++                cfg.define_split("tile_c", c, num_outputs=2, policy="candidate", candidate=[[-1, 1],[-1, 2],[-1, 4],[-1, 8]])
++                co, ci = cfg["tile_c"].apply(s, out, c)
++                cfg.define_split("tile_rco", rco, num_outputs=2, policy="candidate", candidate=[[-1, 1],[-1, 2],[-1, 4],[-1, 8]])
++                rcoo, rcoi = cfg["tile_rco"].apply(s, out, rco)
++
++                s[out].reorder(n, co, rcoo, w, rw, ci, rcoi)
++
++                s[data].compute_at(s[out], rcoi)
++                s[weight].compute_at(s[out], rcoi)
++
++    traverse_inline(s, outs[0].op, _callback)
++
++    return s
++
++
++@autotvm.register_topi_compute("conv1d_nwc.pulp")
++def conv1d_nwc(cfg, data, kernel, strides=1, padding="VALID", dilation=1, out_dtype=None):
++    """1D convolution forward operator for NWC layout.
++
++    Parameters
++    ----------
++    data : tvm.te.Tensor
++        3-D with shape [batch, in_width, in_channel]
++
++    kernel : tvm.te.Tensor
++        3-D with shape [filter_size, in_channel, num_filter]
++
++    strides : int or tuple
++        The spatial stride along width
++
++    padding : int, tuple, or str
++        Padding size can be an integer for equal padding,
++        a tuple of (left, right) or a string in ['VALID', 'SAME'].
++
++    dilation : int or tuple
++        Dilation rate if convolution should be dilated.
++
++    out_dtype : str
++        The output data type. If None then output is same type as input.
++    """
++    if out_dtype is None:
++        out_dtype = data.dtype
++    if isinstance(strides, (tuple, list)):
++        strides = strides[0]
++    if isinstance(dilation, (tuple, list)):
++        dilation = dilation[0]
++
++    batch, data_width, in_channels = data.shape
++    kernel_size, _, out_channels = kernel.shape
++
++    # Compute the output shape
++    dilated_kernel_size = (kernel_size - 1) * dilation + 1
++    pad_left, pad_right = get_pad_tuple1d(padding, (dilated_kernel_size,))
++    out_channels = simplify(out_channels)
++    out_width = simplify((data_width - dilated_kernel_size + pad_left + pad_right) // strides + 1)
++
++    # Compute flop
++    cfg.add_flop(2 * batch * out_channels * out_width * kernel_size * in_channels)
++
++    # Apply padding
++    pad_before = [0, pad_left, 0]
++    pad_after = [0, pad_right, 0]
++    temp = pad(data, pad_before, pad_after, name="pad_temp")
++
++    # Apply padding for tensorization
++    pad_tensorize = -in_channels % get_vec_length(out_dtype, data.dtype, kernel.dtype)
++    temp = pad(temp, (0, 0, 0), (0, 0, pad_tensorize))
++    kernel = pad(kernel, (0, 0, 0), (0, pad_tensorize, 0))
++
++    # Compute graph
++    rc = te.reduce_axis((0, in_channels + pad_tensorize), name="rc")
++    rw = te.reduce_axis((0, kernel_size), name="rw")
++
++    return te.compute(
++        (batch, out_width, out_channels),
++        lambda b, w, c: te.sum(
++            temp[b, w * strides + rw * dilation, rc].astype(out_dtype)
++            * kernel[rw, rc, c].astype(out_dtype),
++            axis=[rw, rc],
++        ),
++        tag="conv1d_nwc",
++    )
++
++
++@autotvm.register_topi_schedule("conv1d_nwc_owi.pulp")
++def schedule_conv1d_nwc_owi(cfg, outs):
++    outs = [outs] if isinstance(outs, te.tensor.Tensor) else outs
++    s = te.create_schedule([x.op for x in outs])
++
++    def _callback(op):
++        if op.tag == "conv1d_nwc_owi":
++            data, weight = op.input_tensors
++            out = op.output(0)
++            n, w, c = op.axis
++            rw, rc = op.reduce_axis
++
++            s[data.op.input_tensors[0]].compute_inline()
++            s[data].compute_at(s[out], rc)
++            s[weight].compute_at(s[out], rc)
++
++            vec_length = get_vec_length(out.dtype, data.dtype, weight.dtype)
++
++            if vec_length != 1:
++                t = sdotp(data.dtype, weight.dtype, out.dtype, vec_length)
++                rco, rci = s[out].split(rc, vec_length)
++                s[out].tensorize(rci, t)
++
++                cfg.define_split("tile_c", c, num_outputs=2, policy="candidate", candidate=[[-1, 1],[-1, 2],[-1, 4],[-1, 8]])
++                co, ci = cfg["tile_c"].apply(s, out, c)
++                cfg.define_split("tile_rco", rco, num_outputs=2, policy="candidate", candidate=[[-1, 1],[-1, 2],[-1, 4],[-1, 8]])
++                rcoo, rcoi = cfg["tile_rco"].apply(s, out, rco)
++
++                s[out].reorder(n, rcoo, w, rw, co, ci, rcoi, rci)
++
++                s[data].compute_at(s[out], rcoi)
++                s[weight].compute_at(s[out], rcoi)
++
++    traverse_inline(s, outs[0].op, _callback)
++
++    return s
++
++
++@autotvm.register_topi_compute("conv1d_nwc_owi.pulp")
++def conv1d_nwc_owi(cfg, data, kernel, strides=1, padding="VALID", dilation=1, out_dtype=None):
++    """1D convolution forward operator for NWC layout.
++
++    Parameters
++    ----------
++    data : tvm.te.Tensor
++        3-D with shape [batch, in_width, in_channel]
++
++    kernel : tvm.te.Tensor
++        3-D with shape [num_filter, filter_size, in_channel]
++
++    strides : int or tuple
++        The spatial stride along width
++
++    padding : int, tuple, or str
++        Padding size can be an integer for equal padding,
++        a tuple of (left, right) or a string in ['VALID', 'SAME'].
++
++    dilation : int or tuple
++        Dilation rate if convolution should be dilated.
++
++    out_dtype : str
++        The output data type. If None then output is same type as input.
++    """
++    if out_dtype is None:
++        out_dtype = data.dtype
++    if isinstance(strides, (tuple, list)):
++        strides = strides[0]
++    if isinstance(dilation, (tuple, list)):
++        dilation = dilation[0]
++
++    batch, data_width, in_channels = data.shape
++    out_channels, kernel_size, _ = kernel.shape
++
++    # Compute the output shape
++    dilated_kernel_size = (kernel_size - 1) * dilation + 1
++    pad_left, pad_right = get_pad_tuple1d(padding, (dilated_kernel_size,))
++    out_channels = simplify(out_channels)
++    out_width = simplify((data_width - dilated_kernel_size + pad_left + pad_right) // strides + 1)
++
++    # Compute flop
++    cfg.add_flop(2 * batch * out_channels * out_width * kernel_size * in_channels)
++
++    # Apply padding
++    pad_before = [0, pad_left, 0]
++    pad_after = [0, pad_right, 0]
++    temp = pad(data, pad_before, pad_after, name="pad_temp")
++
++    # Apply padding for tensorization
++    pad_tensorize = -in_channels % get_vec_length(out_dtype, data.dtype, kernel.dtype)
++    temp = pad(temp, (0, 0, 0), (0, 0, pad_tensorize))
++    kernel = pad(kernel, (0, 0, 0), (0, 0, pad_tensorize))
++
++    # Compute graph
++    rc = te.reduce_axis((0, in_channels + pad_tensorize), name="rc")
++    rw = te.reduce_axis((0, kernel_size), name="rw")
++
++    return te.compute(
++        (batch, out_width, out_channels),
++        lambda b, w, c: te.sum(
++            temp[b, w * strides + rw * dilation, rc].astype(out_dtype)
++            * kernel[c, rw, rc].astype(out_dtype),
++            axis=[rw, rc],
++        ),
++        tag="conv1d_nwc_owi",
++    )
++
++
++@autotvm.register_topi_schedule("conv2d_nchw.pulp")
++def schedule_conv2d_nchw(cfg, outs):
++    outs = [outs] if isinstance(outs, te.tensor.Tensor) else outs
++    s = te.create_schedule([x.op for x in outs])
++
++    def _callback(op):
++        if op.tag == "conv1d_nchw":
++            data, weight = op.input_tensors
++            out = op.output(0)
++            n, c, h, w = op.axis
++            rc, ry, rx = op.reduce_axis
++
++            workload = op.attrs["workload"]
++            dilation = get_const_tuple(workload[5])
++
++            s[data.op.input_tensors[0]].compute_inline()
++            s[data].compute_at(s[out], rx)
++            s[weight].compute_at(s[out], rx)
++
++            vec_length = get_vec_length(out.dtype, data.dtype, weight.dtype)
++
++            if vec_length != 1:
++                t = sdotp(data.dtype, weight.dtype, out.dtype, vec_length, dilation=dilation[1])
++                rxo, rxi = s[out].split(rx, vec_length)
++                s[out].tensorize(rxi, t)
++
++                cfg.define_split("tile_w", w, num_outputs=2, policy="candidate", candidate=[[-1, 1],[-1, 2],[-1, 4],[-1, 8]])
++                wo, wi = cfg["tile_w"].apply(s, out, w)
++                cfg.define_split("tile_rxo", rxo, num_outputs=2, policy="candidate", candidate=[[-1, 1],[-1, 2],[-1, 4],[-1, 8]])
++                rxoo, rxoi = cfg["tile_rxo"].apply(s, out, rxo)
++
++                s[out].reorder(n, wo, rxoo, h, c, rc, ry, wi, rxoi)
++
++                s[data].compute_at(s[out], rxoi)
++                s[weight].compute_at(s[out], rxoi)
++
++    traverse_inline(s, outs[0].op, _callback)
++
++    return s
++
++
++@autotvm.register_topi_compute("conv2d_nchw.pulp")
++def conv2d_nchw(cfg, Input, Filter, stride, padding, dilation, out_dtype=None):
++    """Convolution operator in NCHW layout.
++
++    Parameters
++    ----------
++    Input : tvm.te.Tensor
++        4-D with shape [batch, in_channel, in_height, in_width]
++
++    Filter : tvm.te.Tensor
++        4-D with shape [num_filter, in_channel, filter_height, filter_width]
++
++    stride : int or a list/tuple of two ints
++        Stride size, or [stride_height, stride_width]
++
++    padding : int or a list/tuple of 2 or 4 ints
++        padding size, or
++        [pad_height, pad_width] for 2 ints, or
++        [pad_top, pad_left, pad_bottom, pad_right] for 4 ints
++
++    dilation: int or a list/tuple of two ints
++        dilation size, or [dilation_height, dilation_width]
++
++    Returns
++    -------
++    Output : tvm.te.Tensor
++        4-D with shape [batch, out_channel, out_height, out_width]
++    """
++    if out_dtype is None:
++        out_dtype = Input.dtype
++    assert isinstance(stride, int) or len(stride) == 2
++    assert isinstance(dilation, int) or len(dilation) == 2
++    if isinstance(stride, int):
++        stride_h = stride_w = stride
++    else:
++        stride_h, stride_w = stride
++
++    if isinstance(dilation, int):
++        dilation_h = dilation_w = dilation
++    else:
++        dilation_h, dilation_w = dilation
++
++    batch, in_channel, in_height, in_width = Input.shape
++    num_filter, channel, kernel_h, kernel_w = Filter.shape
++
++    # compute the output shape
++    dilated_kernel_h = (kernel_h - 1) * dilation_h + 1
++    dilated_kernel_w = (kernel_w - 1) * dilation_w + 1
++    pad_top, pad_left, pad_down, pad_right = get_pad_tuple(
++        padding, (dilated_kernel_h, dilated_kernel_w)
++    )
++    out_channel = num_filter
++    out_height = simplify((in_height - dilated_kernel_h + pad_top + pad_down) // stride_h + 1)
++    out_width = simplify((in_width - dilated_kernel_w + pad_left + pad_right) // stride_w + 1)
++
++    # Compute flop
++    cfg.add_flop(2 * batch * out_channel * out_height * out_width * kernel_h * kernel_w * in_channel)
++
++    # Apply padding
++    pad_before = [0, 0, pad_top, pad_left]
++    pad_after = [0, 0, pad_down, pad_right]
++    temp = pad(Input, pad_before, pad_after, name="pad_temp")
++
++    # Apply padding for tensorization
++    pad_tensorize = -kernel_w % get_vec_length(out_dtype, Input.dtype, Filter.dtype)
++    temp = pad(temp, (0, 0, 0, 0), (0, 0, 0, pad_tensorize * dilation_w))
++    Filter = pad(Filter, (0, 0, 0, 0), (0, 0, 0, pad_tensorize))
++
++    # compute graph
++    rc = te.reduce_axis((0, in_channel), name="rc")
++    ry = te.reduce_axis((0, kernel_h), name="ry")
++    rx = te.reduce_axis((0, kernel_w + pad_tensorize), name="rx")
++    return te.compute(
++        (batch, out_channel, out_height, out_width),
++        lambda nn, ff, yy, xx: te.sum(
++            temp[nn, rc, yy * stride_h + ry * dilation_h, xx * stride_w + rx * dilation_w].astype(
++                out_dtype
++            )
++            * Filter[ff, rc, ry, rx].astype(out_dtype),
++            axis=[rc, ry, rx],
++        ),
++        tag="conv2d_nchw",
++    )
++
++
++@autotvm.register_topi_schedule("conv2d_nhwc.pulp")
++def schedule_conv2d_nhwc(cfg, outs):
++    outs = [outs] if isinstance(outs, te.tensor.Tensor) else outs
++    s = te.create_schedule([x.op for x in outs])
++
++    def _callback(op):
++        if op.tag == "conv1d_nhwc":
++            data, weight = op.input_tensors
++            out = op.output(0)
++            n, h, w, c = op.axis
++            ry, rx, rc = op.reduce_axis
++
++            s[data.op.input_tensors[0]].compute_inline()
++            s[data].compute_at(s[out], rc)
++            s[weight].compute_at(s[out], rc)
++
++            vec_length = get_vec_length(out.dtype, data.dtype, weight.dtype)
++
++            if vec_length != 1:
++                t = sdotp(data.dtype, weight.dtype, out.dtype, vec_length, kernel_is_last_axis=False)
++                rco, rci = s[out].split(rc, vec_length)
++                s[out].tensorize(rci, t)
++
++                cfg.define_split("tile_c", c, num_outputs=2, policy="candidate", candidate=[[-1, 1],[-1, 2],[-1, 4],[-1, 8]])
++                co, ci = cfg["tile_c"].apply(s, out, c)
++                cfg.define_split("tile_rco", rco, num_outputs=2, policy="candidate", candidate=[[-1, 1],[-1, 2],[-1, 4],[-1, 8]])
++                rcoo, rcoi = cfg["tile_rco"].apply(s, out, rco)
++
++                s[out].reorder(n, co, rcoo, h, w, ry, rx, ci, rcoi)
++
++                s[data].compute_at(s[out], rcoi)
++                s[weight].compute_at(s[out], rcoi)
++
++    traverse_inline(s, outs[0].op, _callback)
++
++    return s
++
++
++@autotvm.register_topi_compute("conv2d_nhwc.pulp")
++def conv2d_nhwc(
++    cfg,
++    Input,
++    Filter,
++    stride,
++    padding,
++    dilation,
++    out_dtype="float32",
++):
++    """Convolution operator in NHWC layout.
++
++    Parameters
++    ----------
++    Input : tvm.te.Tensor
++        4-D with shape [batch, in_height, in_width, in_channel]
++
++    Filter : tvm.te.Tensor
++        4-D with shape [filter_height, filter_width, in_channel, num_filter]
++
++    stride : int or a list/tuple of two ints
++        Stride size, or [stride_height, stride_width]
++
++    padding : int or a list/tuple of 2 or 4 ints
++        padding size, or
++        [pad_height, pad_width] for 2 ints, or
++        [pad_top, pad_left, pad_bottom, pad_right] for 4 ints
++
++    dilation: int or a list/tuple of two ints
++        dilation size, or [dilation_height, dilation_width]
++
++    out_dtype: str = "float32",
++        The type of output tensor
++
++    Returns
++    -------
++    output : tvm.te.Tensor
++        4-D with shape [batch, out_height, out_width, out_channel]
++    """
++    assert isinstance(stride, int) or len(stride) == 2
++    assert isinstance(dilation, int) or len(dilation) == 2
++
++    if isinstance(stride, int):
++        stride_h = stride_w = stride
++    else:
++        stride_h, stride_w = stride
++
++    if isinstance(dilation, int):
++        dilation_h = dilation_w = dilation
++    else:
++        dilation_h, dilation_w = dilation
++
++    kernel_h, kernel_w, channel, num_filter = Filter.shape
++    batch, in_height, in_width, in_channel = Input.shape
++
++    # compute the output shape
++    dilated_kernel_h = (kernel_h - 1) * dilation_h + 1
++    dilated_kernel_w = (kernel_w - 1) * dilation_w + 1
++    pad_top, pad_left, pad_down, pad_right = get_pad_tuple(
++        padding, (dilated_kernel_h, dilated_kernel_w)
++    )
++    out_channel = num_filter
++    out_height = simplify((in_height - dilated_kernel_h + pad_top + pad_down) // stride_h + 1)
++    out_width = simplify((in_width - dilated_kernel_w + pad_left + pad_right) // stride_w + 1)
++
++    # Compute flop
++    cfg.add_flop(2 * batch * out_channel * out_height * out_width * kernel_h * kernel_w * in_channel)
++
++    # Apply padding
++    pad_before = [0, pad_top, pad_left, 0]
++    pad_after = [0, pad_down, pad_right, 0]
++    PaddedInput = pad(Input, pad_before, pad_after, name="PaddedInput")
++
++    # Apply padding for tensorization
++    pad_tensorize = -in_channel % get_vec_length(out_dtype, Input.dtype, Filter.dtype)
++    PaddedInput = pad(PaddedInput, (0, 0, 0, 0), (0, 0, 0, pad_tensorize))
++    Filter = pad(Filter, (0, 0, 0, 0), (0, 0, pad_tensorize, 0))
++
++    rc = te.reduce_axis((0, in_channel + pad_tensorize), name="rc")
++    ry = te.reduce_axis((0, kernel_h), name="ry")
++    rx = te.reduce_axis((0, kernel_w), name="rx")
++    Output = te.compute(
++        (batch, out_height, out_width, out_channel),
++        lambda nn, yy, xx, ff: te.sum(
++            PaddedInput[
++                nn, yy * stride_h + ry * dilation_h, xx * stride_w + rx * dilation_w, rc
++            ].astype(out_dtype)
++            * Filter[ry, rx, rc, ff].astype(out_dtype),
++            axis=[ry, rx, rc],
++        ),
++        name="Conv2dOutput",
++        tag="conv2d_nhwc",
++    )
++
++    return Output
++
++
++@autotvm.register_topi_schedule("conv2d_nhwc_ohwi.pulp")
++def schedule_conv2d_nhwc_ohwi(cfg : autotvm.ConfigSpace, outs):
++    outs = [outs] if isinstance(outs, te.tensor.Tensor) else outs
++    s = te.create_schedule([x.op for x in outs])
++
++    def _callback(op):
++        if op.tag == "conv2d_nhwc_ohwi":
++            data, weight = op.input_tensors
++            out = op.output(0)
++            n, h, w, c = op.axis
++            ry, rx, rc = op.reduce_axis
++
++
++
++            #s[data.op.input_tensors[0]].compute_inline()
++            #s[data].compute_at(s[out], rc)
++            #s[weight].compute_at(s[out], rc)
++
++            vec_length = get_vec_length(out.dtype, data.dtype, weight.dtype)
++
++            if vec_length != 1 and sdot_available():
++                t = sdotp(data.dtype, weight.dtype, out.dtype, vec_length)
++                rco, rci = s[out].split(rc, vec_length)
++
++
++                s[out].tensorize(rci, t)
++
++
++                cfg.define_split("tile_c", c, num_outputs=2, policy="candidate", candidate=[[-1, 1],[-1, 2],[-1, 4],[-1, 8]])
++                co, ci = cfg["tile_c"].apply(s, out, c)
++                cfg.define_split("tile_rco", rco, num_outputs=2, policy="candidate", candidate=[[-1, 1],[-1, 2],[-1, 4],[-1, 8]])
++                rcoo, rcoi = cfg["tile_rco"].apply(s, out, rco)
++
++                s[out].reorder(n, co, rcoo, h, w, ry, rx, ci, rcoi)
++                cfg.define_reorder("axis_order", [co, rcoo, h, w, ry, rx], policy="all")
++
++
++                #s[data].compute_at(s[out], ci)
++                #s[weight].compute_at(s[out], co)
++
++    traverse_inline(s, outs[0].op, _callback)
++
++    return s
++
++@autotvm.register_topi_compute("conv2d_nhwc_ohwi.pulp")
++def conv2d_nhwc_ohwi(
++    cfg,
++    Input,
++    Filter,
++    stride,
++    padding,
++    dilation,
++    out_dtype="float32",
++):
++    """Convolution operator in NHWC layout.
++
++    Parameters
++    ----------
++    Input : tvm.te.Tensor
++        4-D with shape [batch, in_height, in_width, in_channel]
++
++    Filter : tvm.te.Tensor
++        4-D with shape [num_filter, filter_height, filter_width, in_channel]
++
++    stride : int or a list/tuple of two ints
++        Stride size, or [stride_height, stride_width]
++
++    padding : int or a list/tuple of 2 or 4 ints
++        padding size, or
++        [pad_height, pad_width] for 2 ints, or
++        [pad_top, pad_left, pad_bottom, pad_right] for 4 ints
++
++    dilation: int or a list/tuple of two ints
++        dilation size, or [dilation_height, dilation_width]
++
++    out_dtype: str = "float32",
++        The type of output tensor
++
++    Returns
++    -------
++    output : tvm.te.Tensor
++        4-D with shape [batch, out_height, out_width, out_channel]
++    """
++    assert isinstance(stride, int) or len(stride) == 2
++    assert isinstance(dilation, int) or len(dilation) == 2
++
++    if isinstance(stride, int):
++        stride_h = stride_w = stride
++    else:
++        stride_h, stride_w = stride
++
++    if isinstance(dilation, int):
++        dilation_h = dilation_w = dilation
++    else:
++        dilation_h, dilation_w = dilation
++
++    num_filter, kernel_h, kernel_w, channel = Filter.shape
++    batch, in_height, in_width, in_channel = Input.shape
++
++    # compute the output shape
++    dilated_kernel_h = (kernel_h - 1) * dilation_h + 1
++    dilated_kernel_w = (kernel_w - 1) * dilation_w + 1
++    pad_top, pad_left, pad_down, pad_right = get_pad_tuple(
++        padding, (dilated_kernel_h, dilated_kernel_w)
++    )
++    out_channel = num_filter
++    out_height = simplify((in_height - dilated_kernel_h + pad_top + pad_down) // stride_h + 1)
++    out_width = simplify((in_width - dilated_kernel_w + pad_left + pad_right) // stride_w + 1)
++
++    # Compute flop
++    cfg.add_flop(2 * batch * out_channel * out_height * out_width * kernel_h * kernel_w * in_channel)
++
++    # Apply padding
++    pad_before = [0, pad_top, pad_left, 0]
++    pad_after = [0, pad_down, pad_right, 0]
++    PaddedInput = pad(Input, pad_before, pad_after, name="PaddedInput")
++
++    # Apply padding for tensorization
++    pad_tensorize = -in_channel % get_vec_length(out_dtype, Input.dtype, Filter.dtype)
++    if pad_tensorize != 0:
++        PaddedInput = pad(PaddedInput, (0, 0, 0, 0), (0, 0, 0, pad_tensorize))
++        Filter = pad(Filter, (0, 0, 0, 0), (0, 0, 0, pad_tensorize))
++
++    rc = te.reduce_axis((0, in_channel + pad_tensorize), name="rc")
++    ry = te.reduce_axis((0, kernel_h), name="ry")
++    rx = te.reduce_axis((0, kernel_w), name="rx")
++    Output = te.compute(
++        (batch, out_height, out_width, out_channel),
++        lambda nn, yy, xx, ff: te.sum(
++            PaddedInput[
++                nn, yy * stride_h + ry * dilation_h, xx * stride_w + rx * dilation_w, rc
++            ].astype(out_dtype)
++            * Filter[ff, ry, rx, rc].astype(out_dtype),
++            axis=[ry, rx, rc],
++        ),
++        name="Conv2dOutput",
++        tag="conv2d_nhwc_ohwi",
++    )
++
++    return Output
++
++
++def schedule_pool(outs, layout):
++    """Schedule for pool.
++
++    Parameters
++    ----------
++    outs: Array of Tensor
++        The computation graph description of pool
++        in the format of an array of tensors.
++
++    layout: str
++        Data layout.
++
++    Returns
++    -------
++    s: Schedule
++        The computation schedule for pool.
++    """
++    outs = [outs] if isinstance(outs, te.tensor.Tensor) else outs
++    s = te.create_schedule([x.op for x in outs])
++
++    def _schedule(PaddedInput, Pool):
++        if isinstance(PaddedInput.op, te.ComputeOp):
++            s[PaddedInput].compute_inline()
++
++    scheduled_ops = []
++
++    def traverse(OP):
++        """Internal traverse function"""
++        # inline all one-to-one-mapping operators except the last stage (output)
++        if tag.is_injective(OP.tag):
++            if OP not in s.outputs:
++                s[OP].compute_inline()
++            for tensor in OP.input_tensors:
++                if isinstance(tensor.op, te.tensor.ComputeOp) and tensor.op not in scheduled_ops:
++                    traverse(tensor.op)
++        # schedule pool
++        elif OP.tag.startswith("pool"):
++            PaddedInput = OP.input_tensors[0]
++            Pool = OP.output(0)
++            _schedule(PaddedInput, Pool)
++        else:
++            raise RuntimeError("Unsupported operator: %s" % OP.tag)
++
++        scheduled_ops.append(OP)
++
++    traverse(outs[0].op)
++    return s
+
+diff --git a/src/relay/qnn/op/requantize.cc b/src/relay/qnn/op/requantize.cc
+index 1dd1eae9a..a612bca51 100644
+--- a/src/relay/qnn/op/requantize.cc
++++ b/src/relay/qnn/op/requantize.cc
+@@ -488,13 +488,13 @@ bool RequantizeRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
+       return false;
+     }
+   }
+-  const auto in_dtype = data->dtype;
+-  ICHECK(in_dtype == DataType::Int(8) || in_dtype == DataType::UInt(8) ||
+-         in_dtype == DataType::Int(16) || in_dtype == DataType::Int(32) ||
+-         in_dtype == DataType::Int(64))
+-      << "Input type should be one of [int8, uint8, int16, int32, int64] but was " << in_dtype;
++  //const auto in_dtype = data->dtype;
++  //ICHECK(in_dtype == DataType::Int(8) || in_dtype == DataType::UInt(8) ||
++  //       in_dtype == DataType::Int(32) || in_dtype == DataType::Int(64))
++  //    << "Input type should be one of [int8, uint8, int32, int64] but was " << in_dtype;
+
+   const RequantizeAttrs* requantize_attrs = attrs.as<RequantizeAttrs>();
++
+   int axis = requantize_attrs->axis;
+   auto rank = static_cast<int>(data->shape.size());
+   axis = (axis < 0) ? ((rank > 0) ? data->shape.size() + axis : 0) : axis;
+@@ -517,9 +517,9 @@ bool RequantizeRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
+   const Array<tvm::PrimExpr> oshape = data->shape;
+   // assign output type
+   auto out_dtype = requantize_attrs->out_dtype;
+-  ICHECK(out_dtype == DataType::Int(8) || out_dtype == DataType::UInt(8) ||
+-         out_dtype == DataType::Int(16) || out_dtype == DataType::Int(32))
+-      << "Output type should be one of [int8, uint8, int16, int32] but was " << out_dtype;
++  //ICHECK(out_dtype == DataType::Int(8) || out_dtype == DataType::UInt(8) ||
++  //       out_dtype == DataType::Int(16) || out_dtype == DataType::Int(32))
++  //    << "Output type should be one of [int8, uint8, int16, int32] but was " << out_dtype;
+   reporter->Assign(types[5], TensorType(oshape, out_dtype));
+   return true;
+ }
+diff --git a/src/target/llvm/codegen_llvm.cc b/src/target/llvm/codegen_llvm.cc
+index 3fbc93f67..69125f17c 100644
+--- a/src/target/llvm/codegen_llvm.cc
++++ b/src/target/llvm/codegen_llvm.cc
+@@ -175,6 +175,8 @@ void CodeGenLLVM::InitTarget() {
+       native_vector_bits_ = 256;
+     } else if (arch == llvm::Triple::arm || arch == llvm::Triple::aarch64) {
+       native_vector_bits_ = 128;
++    } else if (arch == llvm::Triple::riscv32) {
++      native_vector_bits_ = 32;
+     } else {
+       native_vector_bits_ = 128;
+       std::string arch_name = std::string(tm->getTargetTriple().getArchName());

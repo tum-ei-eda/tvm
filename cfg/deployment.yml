@@ -26,7 +26,6 @@ cmsisnn: # cmsisnn + cmsisnn
     tir.disable_vectorize: 1
   trials: 10
   targets:
-  targets:
     - kind: cmsisnn
       mattr: "+fp"
     - kind: c
@@ -40,9 +39,9 @@ ethosu: # corstone + ethosu
     unpacked_api: true
   trials: 10
   targets:
-  targets:
     - kind: ethos-u
       accelerator-config: "ethos-u55-32"
     - kind: cmsisnn
       mattr: "+fp"
     - kind: llvm
+# TODO: choose tuning impl

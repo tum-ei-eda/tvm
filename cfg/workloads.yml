@@ -22,3 +22,5 @@ relay:
               value: [10, 10]
           count: 5
           flops: 11111
+          used_by:
+            - CNN_S.relay
