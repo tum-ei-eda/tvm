@@ -1,0 +1,42 @@
+---
+targets:
+  - name: raspberry-pi/4b-aarch64
+    config:
+      kind: "llvm"
+      mtriple: "aarch64-linux-gnu"
+      mcpu: "cortex-a72"
+      mattr: ["+neon"]
+      num-cores: 4
+      host:
+        kind: "llvm"
+        mtriple: "aarch64-linux-gnu"
+        mcpu: "cortex-a72"
+        mattr: ["+neon"]
+        num-cores: 4
+  - name: nvidia/jetson-agx-xavier
+    config:
+      kind: "cuda"
+      arch: "sm_72"
+      max_shared_memory_per_block: 49152
+      max_threads_per_block: 1024
+      thread_warp_size: 32
+      registers_per_block: 65536
+      host:
+        kind: "llvm"
+        mtriple: "aarch64-linux-gnu"
+        mcpu: "carmel"
+        num-cores: 8
+
+# TODO:
+# dest: ?
+# TVM_REGISTER_TARGET_TAG("raspberry-pi/4b-aarch64")
+#     .set_config({{"kind", String("llvm")},
+#                  {"mtriple", String("aarch64-linux-gnu")},
+#                  {"mcpu", String("cortex-a72")},
+#                  {"mattr", Array<String>{"+neon"}},
+#                  {"num-cores", Integer(4)},
+#                  {"host", Map<String, ObjectRef>{{"kind", String("llvm")},
+#                                                  {"mtriple", String("aarch64-linux-gnu")},
+#                                                  {"mcpu", String("cortex-a72")},
+#                                                  {"mattr", Array<String>{"+neon"}},
+#                                                  {"num-cores", Integer(4)}}}});
