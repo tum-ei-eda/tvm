@@ -1,0 +1,48 @@
+# see: https://raw.githubusercontent.com/vproc/vicuna/main/config.mk
+compact:
+  vport:
+    policy: some
+  vmem:
+    width: 32
+  vreg:
+    width: 128
+  vproc:
+    pipelines:
+      - ?:VLSU
+      - VALU
+      - ...
+dual:
+
+
+
+#  - VMEM_W: The width (in bits) of the vector coprocessor's memory interface
+#  - VREG_W: The width (in bits) of the vector coprocessor's vector registers
+#  - VPROC_PIPELINES: Defines the vector pipelines. Each pipeline is defined by
+#    a string of the form "WIDTH:UNIT[,UNIT]*" where WIDTH is the width in bits
+#    of the pipeline's datapath and each occurence of UNIT selects one of the
+#    vector execution units (either VLSU, VALU, VMUL, VSLD, or VELEM).
+#  - VPROC_CONFIG: Sets default values for the other parameters (that can be
+#    individually overriden) depending on the desired number of vector
+#    pipelines (choose 1, 2, 3, or 5 pipelines by setting this variable to
+#    compact, dual, triple, or legacy, respectively).
+
+
+  VPROC_PIPELINES ?= $(VMEM_W):VLSU,VALU,VMUL,VSLD,VELEM
+ifeq ($(VPROC_CONFIG), dual)
+  VPROC_PIPELINES ?= $(VMEM_W):VLSU,VALU,VELEM $(VPIPE_W_VMUL):VMUL,VSLD
+ifeq ($(VPROC_CONFIG), triple)
+  VPORT_POLICY    ?= some
+  VMEM_W          ?= 32
+  VREG_W          ?= 256
+  VPROC_PIPELINES ?= $(VMEM_W):VLSU $(VPIPE_W_DFLT):VALU,VELEM $(VPIPE_W_VMUL):VMUL,VSLD
+else
+ifeq ($(VPROC_CONFIG), legacy)
+  VPORT_POLICY    ?= some
+  VMEM_W          ?= 32
+  VREG_W          ?= 128
+  VPROC_PIPELINES ?= $(VMEM_W):VLSU $(VPIPE_W_DFLT):VALU $(VPIPE_W_VMUL):VMUL                     \
+                                    $(VPIPE_W_DFLT):VSLD 32:VELEM
+
+ifeq ($(VPORT_POLICY), few)
+ifeq ($(VPORT_POLICY), some)
+ifeq ($(VPORT_POLICY), many)
