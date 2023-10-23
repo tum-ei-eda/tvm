@@ -1,3 +1,21 @@
+# EDA@TUM TVM Development
+
+## Disclaimer
+
+NOTE: This is not the standard TVM repository. For that
+repository go to https://github.com/apache/tvm.
+
+This is the repository for EDA@TUM TVM development prior to submitting for
+inclusion upstream. The following main branches are provided:
+
+1. tumeda - This branch tracks upstream TVM and incorporates our own patches.
+It should always compile and pass tests.
+
+2. tumeda-develop - On this branch our latest patches to the TVM project
+can be found including experimental features.
+
+The remainder of this file is the standard TVM project `README.md` file.
+
 <!--- Licensed to the Apache Software Foundation (ASF) under one -->
 <!--- or more contributor license agreements.  See the NOTICE file -->
 <!--- distributed with this work for additional information -->
